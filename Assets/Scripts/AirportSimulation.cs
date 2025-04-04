@@ -1,14 +1,29 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using System.Collections;
 
 public class AirportSimulation : DES
 {
+    // Singleton pattern
+    public static AirportSimulation Instance { get; private set; }
+
+    // Constants for visualization
+    private const float PLANE_SIZE = 5f;
+    private const float PLANE_SPEED = 9f; // 45 units in 5 seconds
+    private const float ARRIVAL_PATH_LENGTH = 45f;
+    private const float PLANE_HEIGHT = 0.5f; // Assuming a default plane height
+
+    [Header("Simulation Parameters")]
     [SerializeField] private int numberOfServers = 5;  // Number of gates
     [SerializeField] private int numberOfQueues = 3;   // Number of waiting areas
     [SerializeField] private float meanServiceTime = 3f;  // Mean service time for planes
     [SerializeField] private float meanArrivalTime = 1f;  // Mean time between arrivals
     [SerializeField] private int totalArrivals = 10;      // Total number of planes to simulate
+    [SerializeField] private float simulationTimeScale = 1f;  // Simulation speed multiplier
+
+    [Header("Visualization")]
+    [SerializeField] private Material planeMaterial; // Optional: for distinguishing planes
 
     private bool[] serverStatus;  // true = busy, false = idle
     private List<Queue<Plane>> queues;  // List of queues for planes
@@ -20,16 +35,10 @@ public class AirportSimulation : DES
     private List<float> queueLengths = new List<float>();  // Track queue lengths over time
     private bool isInitialized = false;
 
-    // Add these fields for visualization preparation
     private Vector3[] gatePositions;  // Will store positions of each gate
-    private Vector3 queueStartPosition = new Vector3(-50, 0, 0);  // Example position for queue start
-    private float gateSpacing = 20f;  // Space between gates
-
+    private Vector3[] queueStartPositions; // Will store positions of each queue
     private float startRealTime;  // To track actual running time
 
-    // Add these fields at the top of the AirportSimulation class
-    [Header("Visualization")]
-    [SerializeField] private GameObject planePrefab;
     private Dictionary<Plane, PlaneVisual> planeVisuals = new Dictionary<Plane, PlaneVisual>();
     private Dictionary<int, List<Plane>> queueContents = new Dictionary<int, List<Plane>>();
 
@@ -50,6 +59,7 @@ public class AirportSimulation : DES
         for (int i = 0; i < numberOfQueues; i++)
         {
             queues.Add(new Queue<Plane>());
+            queueContents[i] = new List<Plane>();
         }
         
         isInitialized = true;
@@ -58,14 +68,28 @@ public class AirportSimulation : DES
 
     public void SetTimeScale(float newTimeScale)
     {
-        timeScale = newTimeScale;
+        simulationTimeScale = newTimeScale;
+        timeScale = simulationTimeScale;
         Debug.Log($"Time scale changed to {newTimeScale}x");
     }
 
     protected override void Awake()
     {
         base.Awake();
+        if (Instance == null)
+        {
+            Instance = this;
+            timeScale = simulationTimeScale;
+            random = new RandomGenerator();
+        }
+        else
+        {
+            Destroy(gameObject);
+            return;
+        }
+        
         InitializeGatePositions();
+        InitializeQueuePositions();
         
         // Initialize queue contents tracking
         for (int i = 0; i < numberOfQueues; i++)
@@ -74,13 +98,101 @@ public class AirportSimulation : DES
         }
     }
 
+    private void Start()
+    {
+        Debug.Log("Starting simulation setup...");
+        // Auto-initialize parameters
+        SetParameters(totalArrivals, meanServiceTime, meanArrivalTime, simulationTimeScale);
+        
+        // Auto-start simulation
+        StartSimulation();
+        Debug.Log($"Simulation started with parameters: Arrivals={totalArrivals}, ServiceTime={meanServiceTime}, ArrivalTime={meanArrivalTime}, TimeScale={simulationTimeScale}");
+    }
+
     private void InitializeGatePositions()
     {
         gatePositions = new Vector3[numberOfServers];
+        
         for (int i = 0; i < numberOfServers; i++)
         {
-            gatePositions[i] = new Vector3(i * gateSpacing, 0, 0);
+            GameObject server = GameObject.Find($"Server {i + 1}");
+            if (server != null)
+            {
+                // Ensure server doesn't fall
+                Rigidbody rb = server.GetComponent<Rigidbody>();
+                if (rb == null)
+                {
+                    rb = server.AddComponent<Rigidbody>();
+                }
+                rb.isKinematic = true;
+                rb.useGravity = false;
+                
+                // Add trigger collider
+                BoxCollider collider = server.GetComponent<BoxCollider>();
+                if (collider == null)
+                {
+                    collider = server.AddComponent<BoxCollider>();
+                }
+                collider.isTrigger = true;
+                
+                gatePositions[i] = server.transform.position;
+                Debug.Log($"Server {i + 1} initialized at position {gatePositions[i]}");
+            }
+            else
+            {
+                Debug.LogError($"Could not find Server {i + 1} in the scene!");
+            }
         }
+    }
+
+    private void InitializeQueuePositions()
+    {
+        queueStartPositions = new Vector3[numberOfQueues];
+        
+        for (int i = 0; i < numberOfQueues; i++)
+        {
+            GameObject queue = GameObject.Find($"Queue {i + 1}");
+            if (queue != null)
+            {
+                // Ensure queue doesn't fall
+                Rigidbody rb = queue.GetComponent<Rigidbody>();
+                if (rb == null)
+                {
+                    rb = queue.AddComponent<Rigidbody>();
+                }
+                rb.isKinematic = true;
+                rb.useGravity = false;
+                
+                // Add trigger collider
+                BoxCollider collider = queue.GetComponent<BoxCollider>();
+                if (collider == null)
+                {
+                    collider = queue.AddComponent<BoxCollider>();
+                }
+                collider.isTrigger = true;
+                
+                queueStartPositions[i] = queue.transform.position;
+                Debug.Log($"Queue {i + 1} initialized at position {queueStartPositions[i]}");
+            }
+            else
+            {
+                Debug.LogError($"Could not find Queue {i + 1} in the scene!");
+            }
+        }
+    }
+
+    public Vector3 GetServerPosition(int serverIndex)
+    {
+        if (serverIndex >= 0 && serverIndex < gatePositions.Length)
+            return gatePositions[serverIndex];
+        return Vector3.zero;
+    }
+
+    public Vector3 GetQueuePosition(int queueIndex)
+    {
+        if (queueIndex >= 0 && queueIndex < queueStartPositions.Length)
+            return queueStartPositions[queueIndex];
+        return Vector3.zero;
     }
 
     public void StartSimulation()
@@ -91,30 +203,39 @@ public class AirportSimulation : DES
             return;
         }
 
-        startRealTime = Time.realtimeSinceStartup;  // Record start time
-        Debug.Log("Starting Airport Simulation...");
-        base.Awake(); // Now initialize the base DES system
+        Debug.Log("Creating first arrival event...");
+        startRealTime = Time.realtimeSinceStartup;
+        
+        // Schedule first arrival
+        SimEvent startEvent = new SimEvent("start", 0f);
+        startEvent.AddAttribute("Type", "start");
+        Schedule(startEvent);
     }
 
     protected override void HandleEvent(SimEvent e)
     {
         string eventType = e.GetAttributeValue<string>("Type");
+        Debug.Log($"Handling event of type: {eventType} at time {clock}");
         
         switch (eventType)
         {
             case "start":
+                Debug.Log("Processing start event");
                 ScheduleNextArrival();
                 break;
                 
             case "arrival":
+                Debug.Log("Processing arrival event");
                 HandleArrival(e);
                 break;
                 
             case "departure":
+                Debug.Log("Processing departure event");
                 HandleDeparture(e);
                 break;
                 
             case "end":
+                Debug.Log("Processing end event");
                 Report();
                 break;
         }
@@ -124,21 +245,27 @@ public class AirportSimulation : DES
     {
         totalPlanes++;
         Plane plane = e.GetAttributeValue<Plane>("Plane");
+        Debug.Log($"Handling arrival of plane {totalPlanes} at time {clock}");
         
-        // Try to find an idle server
-        int serverIndex = FindIdleServer();
+        // Create visual representation at arrival position
+        PlaneVisual visual = CreatePlaneVisual();
+        planeVisuals[plane] = visual;
         
-        if (serverIndex != -1)
-        {
-            // Server is available, move plane to server
-            planeVisuals[plane].TeleportToServer(serverIndex);
-            StartService(plane, serverIndex);
-        }
-        else
-        {
-            // All servers busy, add to shortest queue
-            AddToQueue(plane);
-        }
+        // Start the plane at arrival position
+        visual.StartApproach(ARRIVAL_PATH_LENGTH / PLANE_SPEED, () => {
+            // After arrival animation, assign to server or queue
+            int serverIndex = FindIdleServer();
+            if (serverIndex != -1)
+            {
+                Debug.Log($"Found idle server {serverIndex} for plane {totalPlanes}");
+                StartService(plane, serverIndex);
+            }
+            else
+            {
+                Debug.Log($"No idle server found for plane {totalPlanes}, adding to queue");
+                AddToQueue(plane);
+            }
+        });
         
         // Schedule next arrival if we haven't reached total arrivals
         if (totalPlanes < totalArrivals)
@@ -150,6 +277,45 @@ public class AirportSimulation : DES
             Debug.Log($"All {totalArrivals} planes have arrived. Waiting for remaining services to complete...");
             CheckSimulationCompletion();
         }
+    }
+
+    private void AddToQueue(Plane plane)
+    {
+        // Find shortest queue
+        int shortestQueueIndex = 0;
+        int shortestLength = queues[0].Count;
+        
+        for (int i = 1; i < queues.Count; i++)
+        {
+            if (queues[i].Count < shortestLength)
+            {
+                shortestLength = queues[i].Count;
+                shortestQueueIndex = i;
+            }
+        }
+        
+        // Add to shortest queue
+        queues[shortestQueueIndex].Enqueue(plane);
+        if (planeVisuals.ContainsKey(plane))
+        {
+            planeVisuals[plane].TeleportToQueue(shortestQueueIndex, queues[shortestQueueIndex].Count - 1);
+        }
+    }
+
+    private PlaneVisual CreatePlaneVisual()
+    {
+        GameObject planeObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        planeObj.transform.localScale = new Vector3(PLANE_SIZE, PLANE_SIZE, PLANE_SIZE);
+        planeObj.name = $"Plane_{totalPlanes}";
+        
+        // Remove existing components from primitive
+        DestroyImmediate(planeObj.GetComponent<BoxCollider>());
+        
+        if (planeMaterial != null)
+            planeObj.GetComponent<Renderer>().material = planeMaterial;
+            
+        PlaneVisual visual = planeObj.AddComponent<PlaneVisual>();
+        return visual;
     }
 
     private void HandleDeparture(SimEvent e)
@@ -164,15 +330,23 @@ public class AirportSimulation : DES
             planeVisuals.Remove(departingPlane);
         }
         
-        serverStatus[serverIndex] = false;
+        // Delay server release
+        StartCoroutine(DelayServerRelease(serverIndex));
         
-        // Try to get next plane from queues
-        if (TryGetNextPlane(out Plane nextPlane))
-        {
-            // Update queue visuals
-            UpdateQueueVisuals();
-            StartService(nextPlane, serverIndex);
-        }
+        // Delay before trying to get the next plane
+        StartCoroutine(DelayNextPlaneService(serverIndex));
+        
+        // Update queue visuals after a plane departs
+        UpdateQueueVisuals();
+    }
+
+    /// <summary>
+    /// Called by PlaneVisual when a plane has completed its departure animation
+    /// </summary>
+    public void OnPlaneDepartureComplete()
+    {
+        Debug.Log("[AirportSimulation] Plane departure animation complete");
+        CheckSimulationCompletion();
     }
 
     private bool TryGetNextPlane(out Plane plane)
@@ -201,12 +375,18 @@ public class AirportSimulation : DES
         serverBusyTime[serverIndex] += serviceTime;
         
         // Move plane to server position
-        planeVisuals[plane].TeleportToServer(serverIndex);
+        if (planeVisuals.ContainsKey(plane))
+        {
+            planeVisuals[plane].TeleportToServer(serverIndex);
+        }
         
+        // Schedule departure after service time
         SimEvent departureEvent = new SimEvent("departure", clock + serviceTime);
         departureEvent.AddAttribute("ServerIndex", serverIndex);
         departureEvent.AddAttribute("Plane", plane);
-        AddEvent(departureEvent);
+        Schedule(departureEvent);
+        
+        Debug.Log($"Plane started service at server {serverIndex}, service time: {serviceTime:F2}");
     }
 
     private int FindIdleServer()
@@ -219,25 +399,6 @@ public class AirportSimulation : DES
         return -1;
     }
 
-    private void AddToQueue(Plane plane)
-    {
-        // Find shortest queue
-        var shortestQueue = queues.OrderBy(q => q.Count).First();
-        int queueIndex = queues.IndexOf(shortestQueue);
-        
-        // Add to queue contents tracking
-        queueContents[queueIndex].Add(plane);
-        
-        // Update visual position
-        planeVisuals[plane].TeleportToQueue(queueIndex, shortestQueue.Count - 1);
-        
-        shortestQueue.Enqueue(plane);
-        delayedPlanes++;
-        totalDelayTime += clock - plane.ArrivalTime;
-        
-        RecordQueueLengths();
-    }
-
     private void RecordQueueLengths()
     {
         float totalLength = queues.Sum(q => q.Count);
@@ -247,21 +408,26 @@ public class AirportSimulation : DES
     private void ScheduleNextArrival()
     {
         float nextArrivalTime = clock + random.Exponential(meanArrivalTime);
+        Debug.Log($"Scheduling next arrival at time: {nextArrivalTime}");
+        
         SimEvent arrivalEvent = new SimEvent("arrival", nextArrivalTime);
         Plane newPlane = new Plane(clock);
         arrivalEvent.AddAttribute("Plane", newPlane);
-        AddEvent(arrivalEvent);
-        
-        // Spawn visual representation
-        SpawnPlaneVisual(newPlane);
+        Schedule(arrivalEvent);
     }
 
     private void CheckSimulationCompletion()
     {
         // Check if we've processed all planes and all servers are idle
-        if (totalPlanes >= totalArrivals && !serverStatus.Any(status => status) && !queues.Any(q => q.Count > 0))
+        bool allServersIdle = !serverStatus.Any(status => status);
+        bool allQueuesEmpty = !queues.Any(q => q.Count > 0);
+        bool allPlanesArrived = totalPlanes >= totalArrivals;
+        
+        Debug.Log($"[AirportSimulation] Checking completion - Servers Idle: {allServersIdle}, Queues Empty: {allQueuesEmpty}, All Planes Arrived: {allPlanesArrived}");
+
+        if (allPlanesArrived && allServersIdle && allQueuesEmpty)
         {
-            Debug.Log("All planes processed. Ending simulation...");
+            Debug.Log("[AirportSimulation] All planes processed. Ending simulation...");
             Report();
             isRunning = false;
         }
@@ -343,34 +509,6 @@ public class AirportSimulation : DES
         return positions;
     }
 
-    private void SpawnPlaneVisual(Plane plane)
-    {
-        GameObject planeObj = Instantiate(planePrefab);
-        PlaneVisual visual = planeObj.AddComponent<PlaneVisual>();
-        planeVisuals[plane] = visual;
-        
-        // Start approach movement
-        visual.StartApproach(meanArrivalTime, () => HandlePlaneArrival(plane));
-    }
-
-    private void HandlePlaneArrival(Plane plane)
-    {
-        // Try to find an idle server
-        int serverIndex = FindIdleServer();
-        
-        if (serverIndex != -1)
-        {
-            // Server is available, move plane to server
-            planeVisuals[plane].TeleportToServer(serverIndex);
-            StartService(plane, serverIndex);
-        }
-        else
-        {
-            // All servers busy, add to shortest queue
-            AddToQueue(plane);
-        }
-    }
-
     private void UpdateQueueVisuals()
     {
         // Update positions for all planes in all queues
@@ -382,21 +520,36 @@ public class AirportSimulation : DES
                 if (planeVisuals.ContainsKey(queueList[j]))
                 {
                     planeVisuals[queueList[j]].TeleportToQueue(i, j);
+                    
+                    // Adjust orientation and position of the first plane in the queue to align more towards the servers
+                    if (j == 0)
+                    {
+                        planeVisuals[queueList[j]].transform.rotation = Quaternion.Euler(0, 0, 0);
+                        planeVisuals[queueList[j]].transform.position = new Vector3(
+                            queueStartPositions[i].x,
+                            PLANE_HEIGHT,
+                            queueStartPositions[i].z + 5f // Adjust closer to the server
+                        );
+                    }
                 }
             }
         }
     }
-}
 
-public class Plane
-{
-    public float ArrivalTime { get; private set; }
-    public Vector3 Position { get; set; }  // For visual representation
-    public int AssignedGate { get; set; } = -1;  // -1 means no gate assigned
-    
-    public Plane(float arrivalTime)
+    private IEnumerator DelayServerRelease(int serverIndex)
     {
-        ArrivalTime = arrivalTime;
-        Position = Vector3.zero;  // Will be set when visualizing
+        yield return new WaitForSeconds(3f); // Increase delay to 3 seconds
+        serverStatus[serverIndex] = false;
+    }
+
+    private IEnumerator DelayNextPlaneService(int serverIndex)
+    {
+        yield return new WaitForSeconds(2f); // Delay for 2 seconds
+        
+        // Try to get next plane from queues
+        if (TryGetNextPlane(out Plane nextPlane))
+        {
+            StartService(nextPlane, serverIndex);
+        }
     }
 } 

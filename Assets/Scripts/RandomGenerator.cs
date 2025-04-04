@@ -1,11 +1,11 @@
 using UnityEngine;
 using System;
 
-public class RandomGenerator : MonoBehaviour
+public class RandomGenerator
 {
     private System.Random random;
 
-    public void Initialize()
+    public RandomGenerator()
     {
         random = new System.Random();
     }
@@ -22,6 +22,9 @@ public class RandomGenerator : MonoBehaviour
 
     public float Exponential(float mean)
     {
-        return -mean * (float)Math.Log(1 - random.NextDouble());
+        float u = (float)random.NextDouble();
+        // Avoid taking log of 0
+        while (u == 0) u = (float)random.NextDouble();
+        return -mean * Mathf.Log(u);
     }
 } 

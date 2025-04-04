@@ -16,27 +16,36 @@ public class SimAttribute
 
 public class SimEvent : IComparable<SimEvent>
 {
-    private Dictionary<string, SimAttribute> attributes = new Dictionary<string, SimAttribute>();
-    public float Time { get; private set; }
+    private float time;
+    private Dictionary<string, object> attributes;
+
+    public float Time { get { return time; } }
+
+    public SimEvent(float time)
+    {
+        this.time = time;
+        this.attributes = new Dictionary<string, object>();
+    }
 
     public SimEvent(string type, float time)
     {
-        Time = time;
+        this.time = time;
+        this.attributes = new Dictionary<string, object>();
         AddAttribute("Type", type);
     }
 
-    public void AddAttribute(string name, object value)
+    public void AddAttribute(string key, object value)
     {
-        attributes[name] = new SimAttribute(name, value);
+        attributes[key] = value;
     }
 
-    public T GetAttributeValue<T>(string name)
+    public T GetAttributeValue<T>(string key)
     {
-        if (attributes.TryGetValue(name, out SimAttribute attr))
+        if (attributes.ContainsKey(key))
         {
-            return (T)attr.Value;
+            return (T)attributes[key];
         }
-        throw new KeyNotFoundException($"Attribute {name} not found");
+        return default(T);
     }
 
     public int CompareTo(SimEvent other)
