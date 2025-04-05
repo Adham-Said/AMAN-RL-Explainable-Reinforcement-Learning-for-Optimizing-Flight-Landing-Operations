@@ -1,0 +1,337 @@
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 1
+Server Number = 3
+Average Server Utilization = 94.805380 %
+----
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 3
+Average Server Utilization = 94.805380 %
+----
+Queue Number = 3
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 3
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 3
+Server Number = 3
+Average Server Utilization = 94.805380 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 1
+Server Number = 3
+Average Server Utilization = 94.805380 %
+----
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 3
+Average Server Utilization = 94.805380 %
+----
+Queue Number = 3
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 3
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 3
+Server Number = 3
+Average Server Utilization = 94.805380 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 1
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 1
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 1
+Average Server Utilization = 83.496560 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 93.702795 %
+----
+Queue Number = 2
+Server Number = 2
+Average Server Utilization = 83.496560 %
+----
+Average Delay = 0.1420
+Average queue length = 1.0113
+Average Server Utilization = 204.140746 %
+----
+Average Delay = 0.1420
+Average queue length = 1.0113
+Average Server Utilization = 204.140746 %
+----
+----
+Average Delay = 0.1420
+Average First Queue Length = 0.0536
+Average Second Queue Length = 0.9578
+Average First Server Utilization = 83.028270 %
+Average Second Server Utilization = 45.785025 %
+Average Third Server Utilization = 38.655043 %
+Average Forth Server Utilization = 36.672408 %
+----
+Average Delay = 0.1420
+Average First Queue Length = 0.0536
+Average Second Queue Length = 0.9578
+Average First Server Utilization = 83.028270 %
+Average Second Server Utilization = 45.785025 %
+Average Third Server Utilization = 38.655043 %
+Average Forth Server Utilization = 36.672408 %
+----
+Average Delay = 0.1420
+Average First Queue Length = 0.0536
+Average Second Queue Length = 0.9578
+Average First Server Utilization = 83.028270 %
+Average Second Server Utilization = 45.785025 %
+Average Third Server Utilization = 38.655043 %
+Average Forth Server Utilization = 36.672408 %
+----
+Average Delay = 0.0000
+Average First Queue Length = 244.6111
+Average Second Queue Length = 244.1312
+Average First Server Utilization = 100.000000 %
+Average Second Server Utilization = 99.879985 %
+Average Third Server Utilization = 99.824090 %
+Average Forth Server Utilization = 99.628064 %
+----
+Average Delay = 0.0000
+Average First Queue Length = 244.6111
+Average Second Queue Length = 244.1312
+Average First Server Utilization = 100.000000 %
+Average Second Server Utilization = 99.879985 %
+Average Third Server Utilization = 99.824090 %
+Average Forth Server Utilization = 99.628064 %
+----
+Average Delay = 0.0000
+Average First Queue Length = 244.6111
+Average Second Queue Length = 244.1312
+Average First Server Utilization = 100.000000 %
+Average Second Server Utilization = 99.879985 %
+Average Third Server Utilization = 99.824090 %
+Average Forth Server Utilization = 99.628064 %
+----
+Average Delay = 0.0000
+Average First Queue Length = 244.6111
+Average Second Queue Length = 244.1312
+Average First Server Utilization = 100.000000 %
+Average Second Server Utilization = 99.879985 %
+Average Third Server Utilization = 99.824090 %
+Average Forth Server Utilization = 99.628064 %
+----
+Average Delay = 1.2073
+Average First Queue Length = 0.3335
+Average Second Queue Length = 0.2825
+Average First Server Utilization = 84.765824 %
+Average Second Server Utilization = 99.937183 %
+Average Third Server Utilization = 99.805024 %
+Average Forth Server Utilization = 99.404720 %
+----
+Average Delay = 0.3041
+Average First Queue Length = 0.0157
+Average Second Queue Length = 0.0048
+Average First Server Utilization = 90.571396 %
+Average Second Server Utilization = 99.850282 %
+Average Third Server Utilization = 99.569717 %
+Average Forth Server Utilization = 99.074200 %
+----
+Average Delay = 0.3041
+Average First Queue Length = 0.0157
+Average Second Queue Length = 0.0048
+Average First Server Utilization = 90.571396 %
+Average Second Server Utilization = 99.850282 %
+Average Third Server Utilization = 99.569717 %
+Average Forth Server Utilization = 99.074200 %
+----
+Average Delay = 0.3041
+Average First Queue Length = 0.0157
+Average Second Queue Length = 0.0048
+Average First Server Utilization = 90.571396 %
+Average Second Server Utilization = 99.850282 %
+Average Third Server Utilization = 99.569717 %
+Average Forth Server Utilization = 99.074200 %
+----
+Average Delay = 0.1041
+Average First Queue Length = 0.0004
+Average Second Queue Length = 0.0000
+Average First Server Utilization = 98.077160 %
+Average Second Server Utilization = 99.976945 %
+Average Third Server Utilization = 99.933740 %
+Average Forth Server Utilization = 99.809658 %
+----
+Average Delay = 0.0000
+Average First Queue Length = 0.0000
+Average Second Queue Length = 0.0000
+Average First Server Utilization = 99.999066 %
+Average Second Server Utilization = 0.000000 %
+Average Third Server Utilization = 0.000000 %
+Average Forth Server Utilization = 0.000000 %
+----
+Average Delay = 0.0000
+Average First Queue Length = 0.0000
+Average Second Queue Length = 0.0000
+Average First Server Utilization = 99.917259 %
+Average Second Server Utilization = 0.003000 %
+Average Third Server Utilization = 0.000000 %
+Average Forth Server Utilization = 0.000000 %
+----
+Average Delay = 0.0000
+Average First Queue Length = 0.0000
+Average Second Queue Length = 0.0000
+Average First Server Utilization = 85.734623 %
+Average Second Server Utilization = 59.562458 %
+Average Third Server Utilization = 0.365575 %
+Average Forth Server Utilization = 0.000000 %
+----
+Average Delay = 0.2231
+Average First Queue Length = 0.0348
+Average Second Queue Length = 0.0134
+Average First Server Utilization = 87.383881 %
+Average Second Server Utilization = 98.858617 %
+Average Third Server Utilization = 97.187735 %
+Average Forth Server Utilization = 96.719707 %
+----
+Average Delay = 0.1388
+Average First Queue Length = 0.0167
+Average Second Queue Length = 0.0049
+Average First Server Utilization = 89.815646 %
+Average Second Server Utilization = 98.858617 %
+Average Third Server Utilization = 97.187735 %
+Average Forth Server Utilization = 96.719707 %
+----
+Average Delay = 0.0023
+Average First Queue Length = 0.0002
+Average Second Queue Length = 0.0000
+Average First Server Utilization = 98.234222 %
+Average Second Server Utilization = 98.858617 %
+Average Third Server Utilization = 96.719707 %
+Average Forth Server Utilization = 90.576875 %
+----
