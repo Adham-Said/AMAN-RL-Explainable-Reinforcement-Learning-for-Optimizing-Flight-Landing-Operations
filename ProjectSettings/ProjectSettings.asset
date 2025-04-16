@@ -4,7 +4,7 @@
 PlayerSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 28
-  productGUID: e0d5a0c96e6e1234ea51b59d2c7262e9
+  productGUID: 3c65d544c6c6a8d4084a4b754dd30770
   AndroidProfiler: 0
   AndroidFilterTouchesWhenObscured: 0
   AndroidEnableSustainedPerformanceMode: 0
@@ -13,7 +13,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: DefaultCompany
-  productName: VDES
+  productName: VDES 2.0
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -837,14 +837,14 @@ PlayerSettings:
   editorAssembliesCompatibilityLevel: 1
   m_RenderingPath: 1
   m_MobileRenderingPath: 1
-  metroPackageName: VDES
+  metroPackageName: VDES 2.0
   metroPackageVersion: 
   metroCertificatePath: 
   metroCertificatePassword: 
   metroCertificateSubject: 
   metroCertificateIssuer: 
   metroCertificateNotAfter: 0000000000000000
-  metroApplicationDescription: VDES
+  metroApplicationDescription: VDES 2.0
   wsaImages: {}
   metroTileShortName: 
   metroTileShowName: 0
@@ -915,10 +915,10 @@ PlayerSettings:
   captureStartupLogs: {}
   activeInputHandler: 2
   windowsGamepadBackendHint: 0
-  cloudProjectId: 637190ea-726f-4078-a53c-921a00ca73cd
+  cloudProjectId: e73cbd14-63ee-4928-bd2c-636a87d3fe47
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
-  projectName: VDES 2025-04-04_19-06-59
+  projectName: VDES 2.0
   organizationId: mohamed2110465
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0
