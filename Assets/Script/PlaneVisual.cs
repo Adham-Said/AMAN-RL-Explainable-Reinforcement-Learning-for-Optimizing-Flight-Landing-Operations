@@ -5,6 +5,7 @@ using DG.Tweening;
 public class PlaneVisual : MonoBehaviour
 {
     private const float ARRIVAL_THRESHOLD = 0.01f;
+    private Action onMovementComplete;
 
     private void Awake()
     {
@@ -19,9 +20,20 @@ public class PlaneVisual : MonoBehaviour
         Gizmos.DrawWireCube(transform.position, boxSize);
     }
 
-    private Action onMovementComplete;
+    private void InitializePhysics()
+    {
+        Rigidbody rb = gameObject.AddComponent<Rigidbody>();
+        rb.useGravity = false;
+        rb.isKinematic = true;
+    }
 
-    public void LandingAnimation(Vector3[] waypoints, float flyHeight, float landingHeight, float flySpeed, float landingSpeed, float taxiSpeed, Action onComplete)
+    private void InitializeCollider()
+    {
+        BoxCollider box = gameObject.AddComponent<BoxCollider>();
+        box.isTrigger = true;
+    }
+
+    public void LandingAnimation(Vector3[] waypoints, float flyHeight, float landingHeight, float flySpeed, float landingSpeed, float taxiSpeed, Action onComplete = null)
     {
         // Step 1: Spawn - Place plane at waypoint 0 with flySpeed
         transform.position = new Vector3(waypoints[0].x, flyHeight, waypoints[0].z);
@@ -50,7 +62,7 @@ public class PlaneVisual : MonoBehaviour
         );
     }
 
-    public void Approach1to5Servers(Vector3[] waypoints, float landingHeight, float taxiSpeed, Action onComplete)
+    public void Approach1to5Servers(Vector3[] waypoints, float landingHeight, float taxiSpeed, Action onComplete = null)
     {
         // Step 5: Curved taxi from waypoint 3 to 5 with waypoint 4 as control point
         RotateAroundPointArc(
@@ -83,17 +95,46 @@ public class PlaneVisual : MonoBehaviour
         );
     }
 
-    private void InitializePhysics()
+    public void Approach6to10Servers(Vector3[] waypoints, float landingHeight, float taxiSpeed, Action onComplete = null)
     {
-        Rigidbody rb = gameObject.AddComponent<Rigidbody>();
-        rb.useGravity = false;
-        rb.isKinematic = true;
+        // Step 5: Curved taxi from waypoint 3 to 5 with waypoint 4 as control point
+        RotateAroundPointArc(
+            new Vector3(waypoints[3].x, landingHeight, waypoints[3].z),
+            new Vector3(waypoints[4].x, landingHeight, waypoints[4].z),
+            new Vector3(waypoints[5].x, landingHeight, waypoints[5].z),
+            taxiSpeed,
+            false,
+            () => {
+                // Step 6: Curved taxi from waypoint 5 to 7 with waypoint 6 as control point
+                RotateAroundPointArc(
+                    new Vector3(waypoints[5].x, landingHeight, waypoints[5].z),
+                    new Vector3(waypoints[6].x, landingHeight, waypoints[6].z),
+                    new Vector3(waypoints[7].x, landingHeight, waypoints[7].z),
+                    taxiSpeed,
+                    false,
+                    () => {
+                        // Step 7: Curved taxi from waypoint 7 to 9 with waypoint 8 as control point
+                        RotateAroundPointArc(
+                            new Vector3(waypoints[7].x, landingHeight, waypoints[7].z),
+                            new Vector3(waypoints[8].x, landingHeight, waypoints[8].z),
+                            new Vector3(waypoints[9].x, landingHeight, waypoints[9].z),
+                            taxiSpeed,
+                            true,
+                            onComplete
+                        );
+                    }
+                );
+            }
+        );
     }
 
-    private void InitializeCollider()
+    public void ApproachHold(Vector3[] waypoints, float flyHeight, float flySpeed, Action onComplete = null)
     {
-        BoxCollider box = gameObject.AddComponent<BoxCollider>();
-        box.isTrigger = true;
+        MoveToPositionDOTween(
+            new Vector3(waypoints[0].x, flyHeight, waypoints[0].z),
+            flySpeed,
+            onComplete
+        );
     }
 
     private void MoveToPositionDOTween(Vector3 endPos, float speed, Action onComplete = null)

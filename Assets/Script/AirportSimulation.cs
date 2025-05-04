@@ -36,6 +36,7 @@ public class AirportSimulation : DES
     private float[] HoldBusyTime;
     public int TotalPlanes = 0;
     public int DelayedPlanes = 0;
+    public int DivertedPlanes = 0;
     public float TotalDelayTime = 0f;
     public float[] ServerUtilization;
     public float[] ServerBusyTime;
@@ -198,7 +199,7 @@ public class AirportSimulation : DES
         
         // Checks if their are idle server and the airstrip is clear
         int serverIndex = FindIdleServer();
-        if (serverIndex = -1) 
+        if (serverIndex == -1) 
         {
             Debug.Log($"No idle server found for plane {TotalPlanes}, adding plane {TotalPlanes} to hold");
             AddToHold(plane);
@@ -206,11 +207,11 @@ public class AirportSimulation : DES
             {
                 Debug.Log($"There is already other plane landing, adding plane {TotalPlanes} to hold");
                 AddToHold(plane);
-            }
-            break;   
+            }   
         }
 
-
+        IsArrivalClear = false;
+        ServerStatus[serverIndex] = 1;
 
         // Start the plane at arrival position
         visual.LandingAnimation(
@@ -219,13 +220,28 @@ public class AirportSimulation : DES
             PlaneLandingHeight, // landing/taxi height
             PlaneFlySpeed, // approach speed
             PlaneLandingSpeed, // landing speed
-            PlaneTaxiSpeed, // taxi 
-            
+            PlaneTaxiSpeed // taxi speed 
         );
 
         if (serverIndex < 6){
-
+            visual.Approach1to5Servers(
+                Waypoints,
+                PlaneLandingHeight,
+                PlaneTaxiSpeed
+            );
         }
+        else
+        {
+            visual.Approach6to10Servers(
+                Waypoints,
+                PlaneLandingHeight,
+                PlaneTaxiSpeed
+            );
+        }
+
+        // Plane reached the server
+        ServerStatus[serverIndex] = 2;
+        IsArrivalClear = true;
         
         // Schedule next arrival if we haven't reached total arrivals
         if (TotalPlanes < TotalArrivals)
@@ -242,7 +258,17 @@ public class AirportSimulation : DES
     {
         for (int i = 0; i < ServerStatus.Length; i++)
         {
-            if (!ServerStatus[i])
+            if (ServerStatus[i] == 0)
+                return i;
+        }
+        return -1;
+    }
+
+    private int FindIdleHold()
+    {
+        for (int i = 0; i < HoldStatus.Length; i++)
+        {
+            if (HoldStatus[i] == 0)
                 return i;
         }
         return -1;
@@ -256,25 +282,17 @@ public class AirportSimulation : DES
         return IsDepartureClear;
     }
 
-    private int FindIdleHold()
-    {
-        for (int i = 0; i < HoldStatus.Length; i++)
-        {
-            if (!HoldStatus[i])
-                return i;
-        }
-        return -1;
-    }
+
 
     private void StartService(Plane plane, int serverIndex)
     {
-        ServerStatus[serverIndex] = true;
+        ServerStatus[serverIndex] = 2;
         Debug.Log($"Plane {plane} assigned to server {serverIndex}.");
     }
 
     private void StartHold(Plane plane, int holdIndex)
     {
-        HoldStatus[holdIndex] = true;
+        HoldStatus[holdIndex] = 2;
         Debug.Log($"Plane {plane} assigned to hold {holdIndex}.");
     }
 
@@ -291,12 +309,16 @@ public class AirportSimulation : DES
         if (holdIndex != -1)
         {
             Debug.Log($"Adding plane {plane} to hold {holdIndex}");
-            HoldStatus[holdIndex] = true;
+            HoldStatus[holdIndex] = 1;
 
-            if (PlaneVisuals.ContainsKey(plane))
-            {
-                //PlaneVisuals[plane].TeleportToHold(holdIndex);
-            }
+            visual.ApproachHold(
+                Waypoints, // pass the waypoints array
+                PlaneFlyHeight, // approach height
+                PlaneLandingHeight, // landing/taxi height
+                PlaneFlySpeed, // approach speed
+                PlaneLandingSpeed, // landing speed
+                PlaneTaxiSpeed // taxi speed 
+            );
 
             SimEvent releaseEvent = new SimEvent("releaseHold", Clock);
             releaseEvent.AddAttribute("HoldIndex", holdIndex);
@@ -305,8 +327,8 @@ public class AirportSimulation : DES
         }
         else
         {
-            Debug.LogError($"No available hold for plane {plane}. Plane is delayed.");
-            DelayedPlanes++;
+            Debug.LogError($"No available hold for plane {plane}. Plane is diverted.");
+            DivertedPlanes++;
         }
     }
 
@@ -319,7 +341,7 @@ public class AirportSimulation : DES
         if (serverIndex != -1)
         {
             Debug.Log($"Releasing plane {plane} from hold {holdIndex} to server {serverIndex}");
-            HoldStatus[holdIndex] = false;
+            HoldStatus[holdIndex] = 0;
             StartService(plane, serverIndex);
         }
         else
@@ -337,12 +359,6 @@ public class AirportSimulation : DES
     {
         Debug.Log("Departure logic not implemented yet.");
     }
-
-    
-
-
-    
-    
 
     // Checks if all planes have completed their arrivals and ends the simulation, then calls for the report
     private void CheckSimulationCompletion()
