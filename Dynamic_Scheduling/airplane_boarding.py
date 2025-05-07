@@ -33,17 +33,28 @@ class Passenger:
     def __init__(self, seat_num, row_num):
         self.seat_num = seat_num
         self.row_num = row_num
-        self.low_fuel = np.random.choice([True, False])
+        self.low_fuel = np.random.choice([True, False], p = [0.3, 0.7])
         self.is_holding_luggage = True
         self.status = PassengerStatus.MOVING
+        self.MST = np.random.choice([5, 10, 15], p = [0.15, 0.15, 0.7])
+        self.in_transit = np.random.choice([True, False], p = [0.1, 0.9])
         self.seated_timer = 0
+        
+        if self.in_transit or self.MST in [5, 10] or self.low_fuel == True:
+            self.high_priority = True
+
+        else:
+            self.high_priority =  False
+
+        
+
 
     # Returns the string representation of the Passenger class i.e. 2 digit seat number
     def __str__(self):
-        if self.low_fuel == True:    
-            return f"L{self.seat_num:02d}"
-        else:
+        if self.high_priority == True:    
             return f"H{self.seat_num:02d}"
+        else:
+            return f"L{self.seat_num:02d}"
 
 class LobbyRow:
     def __init__(self, row_num, seats_per_row):
@@ -75,20 +86,20 @@ class Lobby:
 
         return count
     
-    def num_low_fuel_passengers_in_lobby(self):
+    def num_high_priority_passengers_in_lobby(self):
         count = 0
         for row in self.lobby_rows:
             for passenger in row.passengers:
-                if  passenger.low_fuel == True:
+                if  passenger.high_priority == True:
                     count += 1
 
         return count
     
-    def num_high_fuel_passengers_in_lobby(self):
+    def num_low_priority_passengers_in_lobby(self):
         count = 0
         for row in self.lobby_rows:
             for passenger in row.passengers:
-                if  passenger.low_fuel == False:
+                if  passenger.high_priority == False:
                     count += 1
 
         return count
@@ -198,10 +209,10 @@ class Seat:
         if self.passenger is None:
             return f"S{self.seat_num:02d}"
         else:
-            if self.passenger.low_fuel == True: 
-                return f"L{self.seat_num:02d}"
-            else:
+            if self.passenger.high_priority == True: 
                 return f"H{self.seat_num:02d}"
+            else:
+                return f"L{self.seat_num:02d}"
 
 
 class AirplaneRow:
@@ -285,7 +296,7 @@ class AirplaneEnv(gym.Env):
             for passenger in row.passengers:
                 observation.append([
                     passenger.seat_num,
-                    int(passenger.low_fuel)  # Ensure it's int (0 or 1)
+                    int(passenger.high_priority)  # Ensure it's int (0 or 1)
                 ])
             
             # Fill remaining seats in the row with -1s (empty seats)
@@ -325,7 +336,7 @@ class AirplaneEnv(gym.Env):
         return self._get_observation(), reward, terminated, False, {}
 
     def _calculate_reward(self):
-        reward = -self.lobby.num_low_fuel_passengers_in_lobby() + self.lobby.num_high_fuel_passengers_in_lobby()
+        reward = -self.lobby.num_high_priority_passengers_in_lobby() + self.lobby.num_low_priority_passengers_in_lobby()
         return reward
 
     def is_onboarding(self):
