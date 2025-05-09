@@ -248,7 +248,7 @@ class AirplaneEnv(gym.Env):
 
         # Define the Observation space.
         # The observation space is used to validate the observation returned by reset() and step().
-        # [0,-1,1,-1,2,-1....,6,2,7,1.....]
+        # [0,1,1,0,-1,-1....,6,0,7,1.....]
         self.observation_space = spaces.Box(
             low=-1,
             high=self.num_of_seats-1,
@@ -267,6 +267,22 @@ class AirplaneEnv(gym.Env):
         self.render()
 
         return self._get_observation(), {}
+    
+
+
+    def set_custom_observation(self, obs):
+        # Ensure lobby and any dependent variables are set up
+        if not hasattr(self, "lobby") or self.lobby is None:
+            self.reset()
+
+        # Set the observation manually
+        self.current_obs = obs
+    # If necessary, decode obs → state and manually update self.lobby etc.
+
+
+
+
+
 
     # Returns an array of the number of passengers in line
     # def _get_observation(self):
