@@ -1,4 +1,5 @@
 import gymnasium as gym
+import shap
 from airplane_boarding import AirplaneEnv
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.utils import get_action_masks
@@ -79,25 +80,19 @@ def test(model_name, render=True):
 
     print(f"Total rewards: {rewards}")
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
     # train()
     test("manual_save_5400000")
 
-# #############################################################################################################
-# ##XAI
-# ###gpt 
-# import gymnasium as gym
-# from airplane_boarding import AirplaneEnv
-# from sb3_contrib import MaskablePPO
-# from sb3_contrib.common.maskable.utils import get_action_masks
-# import shap
-# import numpy as np
-# import torch
+#############################################################################################################
+##XAI
+###gpt 
 
-# def explain_decision(model_name="manual_save_3000000"):
+
+# def explain_decision(model_name="manual_save_5400000"):
 #     # Load environment and model
 #     env = gym.make('airplane-boarding-v0', num_of_rows=4, seats_per_row=5, render_mode=None)
-#     model = MaskablePPO.load(f'agents/MaskablePPO/PPO_32/{model_name}', env=env)
+#     model = MaskablePPO.load(f'agents/MaskablePPO/PPO_33/{model_name}', env=env)
     
 #     # Calculate num_of_seats directly
 #     num_of_rows = 4
@@ -214,7 +209,7 @@ if __name__ == '__main__':
 
 # if __name__ == '__main__':
 #     # train()
-#     test("manual_save_3000000")
+#     test("manual_save_5400000")
 #     #############################################################################################################
-#     explain_decision("manual_save_3000000")
+#     explain_decision("manual_save_5400000")
 
