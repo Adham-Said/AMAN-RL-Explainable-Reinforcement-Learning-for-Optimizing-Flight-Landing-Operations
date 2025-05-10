@@ -38,7 +38,7 @@ def train():
     # Increase ent_coef to encourage exploration, this resulted in a better solution.
     model = MaskablePPO('MlpPolicy', env, verbose=1, device='cpu', tensorboard_log=log_dir, ent_coef=0.05)
 
-    save_callback = PeriodicSaveCallback(save_freq=100_000, save_path=os.path.join(agent_dir, 'MaskablePPO', 'PPO_32'), verbose=1)
+    save_callback = PeriodicSaveCallback(save_freq=100_000, save_path=os.path.join(agent_dir, 'MaskablePPO', 'PPO_33'), verbose=1)
 
     eval_callback = MaskableEvalCallback(
         env,
@@ -60,7 +60,7 @@ def test(model_name, render=True):
     env = gym.make('airplane-boarding-v0', num_of_rows=4, seats_per_row=5, num_of_plane_rows = 4,render_mode='terminal' if render else None)
 
     # Load model
-    model = MaskablePPO.load(f'agents/MaskablePPO/PPO_32/{model_name}', env=env)
+    model = MaskablePPO.load(f'agents/MaskablePPO/PPO_33/{model_name}', env=env)
 
     rewards = 0
     # Run a test
@@ -81,140 +81,140 @@ def test(model_name, render=True):
 
 if __name__ == '__main__':
     # train()
-    test("manual_save_3000000")
+    test("manual_save_5400000")
 
-#############################################################################################################
-##XAI
-###gpt 
-import gymnasium as gym
-from airplane_boarding import AirplaneEnv
-from sb3_contrib import MaskablePPO
-from sb3_contrib.common.maskable.utils import get_action_masks
-import shap
-import numpy as np
-import torch
+# #############################################################################################################
+# ##XAI
+# ###gpt 
+# import gymnasium as gym
+# from airplane_boarding import AirplaneEnv
+# from sb3_contrib import MaskablePPO
+# from sb3_contrib.common.maskable.utils import get_action_masks
+# import shap
+# import numpy as np
+# import torch
 
-def explain_decision(model_name="manual_save_3000000"):
-    # Load environment and model
-    env = gym.make('airplane-boarding-v0', num_of_rows=4, seats_per_row=5, render_mode=None)
-    model = MaskablePPO.load(f'agents/MaskablePPO/PPO_32/{model_name}', env=env)
+# def explain_decision(model_name="manual_save_3000000"):
+#     # Load environment and model
+#     env = gym.make('airplane-boarding-v0', num_of_rows=4, seats_per_row=5, render_mode=None)
+#     model = MaskablePPO.load(f'agents/MaskablePPO/PPO_32/{model_name}', env=env)
     
-    # Calculate num_of_seats directly
-    num_of_rows = 4
-    seats_per_row = 5
-    num_of_seats = num_of_rows * seats_per_row
+#     # Calculate num_of_seats directly
+#     num_of_rows = 4
+#     seats_per_row = 5
+#     num_of_seats = num_of_rows * seats_per_row
     
-    # Reset environment and get initial observation
-    obs, _ = env.reset(seed=42)
-    action_masks = get_action_masks(env)
+#     # Reset environment and get initial observation
+#     obs, _ = env.reset(seed=42)
+#     action_masks = get_action_masks(env)
     
-    # Get model's action
-    action, _ = model.predict(observation=obs, deterministic=True, action_masks=action_masks)
+#     # Get model's action
+#     action, _ = model.predict(observation=obs, deterministic=True, action_masks=action_masks)
     
-    # Print decision
-    print(f"\n✈️ Decision: Selected passenger in seat {action} to board next")
+#     # Print decision
+#     print(f"\n✈️ Decision: Selected passenger in seat {action} to board next")
     
-    # Prepare observation for SHAP
-    obs_input = obs.reshape(1, -1)
+#     # Prepare observation for SHAP
+#     obs_input = obs.reshape(1, -1)
     
-    print(f"Observation shape: {obs.shape}, Action: {action}")
-    print(f"Available actions: {np.where(action_masks)[0]}")
+#     print(f"Observation shape: {obs.shape}, Action: {action}")
+#     print(f"Available actions: {np.where(action_masks)[0]}")
     
-    try:
-        # Create a simpler explanation based on the observation directly
-        print("\n🔍 Simple explanation for controller:")
+#     try:
+#         # Create a simpler explanation based on the observation directly
+#         print("\n🔍 Simple explanation for controller:")
         
-        # Extract passenger information from observation
-        passengers = []
-        for i in range(0, len(obs), 2):
-            seat_num = obs[i]
-            fuel_level = obs[i+1]
-            if seat_num >= 0:  # Valid passenger
-                passengers.append((seat_num, fuel_level, i//2))
+#         # Extract passenger information from observation
+#         passengers = []
+#         for i in range(0, len(obs), 2):
+#             seat_num = obs[i]
+#             fuel_level = obs[i+1]
+#             if seat_num >= 0:  # Valid passenger
+#                 passengers.append((seat_num, fuel_level, i//2))
         
-        # Find the selected passenger
-        selected = next((p for p in passengers if p[0] == action), None)
+#         # Find the selected passenger
+#         selected = next((p for p in passengers if p[0] == action), None)
         
-        if selected:
-            seat_num, fuel_level, idx = selected
-            if fuel_level == 1:  # Low fuel
-                print(f"- Passenger in seat {seat_num} was selected because they have low fuel reserves")
-            else:
-                print(f"- Passenger in seat {seat_num} was selected based on optimal boarding sequence")
+#         if selected:
+#             seat_num, fuel_level, idx = selected
+#             if fuel_level == 1:  # Low fuel
+#                 print(f"- Passenger in seat {seat_num} was selected because they have low fuel reserves")
+#             else:
+#                 print(f"- Passenger in seat {seat_num} was selected based on optimal boarding sequence")
                 
-            # Compare with other passengers
-            other_low_fuel = [p for p in passengers if p[1] == 1 and p[0] != seat_num]
-            if other_low_fuel and fuel_level == 0:
-                print(f"- Despite {len(other_low_fuel)} passengers with low fuel, this passenger's position was prioritized")
+#             # Compare with other passengers
+#             other_low_fuel = [p for p in passengers if p[1] == 1 and p[0] != seat_num]
+#             if other_low_fuel and fuel_level == 0:
+#                 print(f"- Despite {len(other_low_fuel)} passengers with low fuel, this passenger's position was prioritized")
             
-            # Check seat position (front vs back)
-            if seat_num < num_of_seats // 2:
-                print(f"- Passenger is seated in the front half of the plane (seat {seat_num})")
-            else:
-                print(f"- Passenger is seated in the back half of the plane (seat {seat_num})")
+#             # Check seat position (front vs back)
+#             if seat_num < num_of_seats // 2:
+#                 print(f"- Passenger is seated in the front half of the plane (seat {seat_num})")
+#             else:
+#                 print(f"- Passenger is seated in the back half of the plane (seat {seat_num})")
         
-        # Try SHAP explanation if simple explanation isn't enough
-        print("\nAttempting SHAP explanation...")
-        # Function to get model's logits for SHAP
-        def model_fn(input_array):
-            input_tensor = torch.tensor(input_array, dtype=torch.float32)
-            latent_pi, _ = model.policy.mlp_extractor(input_tensor)
-            logits = model.policy.action_net(latent_pi)
-            # Apply action mask to logits
-            masked_logits = logits.clone()
-            masked_logits[:, ~np.array(action_masks)] = -1e8
-            return masked_logits.detach().numpy()
+#         # Try SHAP explanation if simple explanation isn't enough
+#         print("\nAttempting SHAP explanation...")
+#         # Function to get model's logits for SHAP
+#         def model_fn(input_array):
+#             input_tensor = torch.tensor(input_array, dtype=torch.float32)
+#             latent_pi, _ = model.policy.mlp_extractor(input_tensor)
+#             logits = model.policy.action_net(latent_pi)
+#             # Apply action mask to logits
+#             masked_logits = logits.clone()
+#             masked_logits[:, ~np.array(action_masks)] = -1e8
+#             return masked_logits.detach().numpy()
             
-        # Create SHAP explainer with a simple background
-        explainer = shap.KernelExplainer(model_fn, obs_input)
-        shap_values = explainer.shap_values(obs_input)
+#         # Create SHAP explainer with a simple background
+#         explainer = shap.KernelExplainer(model_fn, obs_input)
+#         shap_values = explainer.shap_values(obs_input)
         
-        print(f"SHAP values shape: {np.array(shap_values).shape}")
+#         print(f"SHAP values shape: {np.array(shap_values).shape}")
         
-        # Create human-readable feature names
-        feature_names = []
-        for i in range(len(obs)):
-            if i % 2 == 0:
-                feature_names.append(f"seat_{i//2}")
-            else:
-                feature_names.append(f"fuel_level_{i//2}")
+#         # Create human-readable feature names
+#         feature_names = []
+#         for i in range(len(obs)):
+#             if i % 2 == 0:
+#                 feature_names.append(f"seat_{i//2}")
+#             else:
+#                 feature_names.append(f"fuel_level_{i//2}")
         
-        # Get top contributing features for this action
-        if action < len(shap_values):
-            values = shap_values[action][0]
-            top_indices = np.argsort(np.abs(values))[::-1][:5]
+#         # Get top contributing features for this action
+#         if action < len(shap_values):
+#             values = shap_values[action][0]
+#             top_indices = np.argsort(np.abs(values))[::-1][:5]
             
-            print("\n🔍 SHAP Explanation for controller:")
-            print(f"The system selected passenger in seat {action} because:")
+#             print("\n🔍 SHAP Explanation for controller:")
+#             print(f"The system selected passenger in seat {action} because:")
             
-            for i in top_indices:
-                if abs(values[i]) > 0.01:  # Only show significant contributions
-                    feature = feature_names[i]
-                    direction = "prioritized" if values[i] > 0 else "deprioritized"
-                    magnitude = "strongly" if abs(values[i]) > 0.1 else "somewhat"
+#             for i in top_indices:
+#                 if abs(values[i]) > 0.01:  # Only show significant contributions
+#                     feature = feature_names[i]
+#                     direction = "prioritized" if values[i] > 0 else "deprioritized"
+#                     magnitude = "strongly" if abs(values[i]) > 0.1 else "somewhat"
                     
-                    if "fuel" in feature and values[i] > 0:
-                        print(f"- This passenger's fuel level {magnitude} influenced the decision")
-                    elif "seat" in feature:
-                        print(f"- The passenger's seat position ({feature}) {magnitude} {direction} them")
+#                     if "fuel" in feature and values[i] > 0:
+#                         print(f"- This passenger's fuel level {magnitude} influenced the decision")
+#                     elif "seat" in feature:
+#                         print(f"- The passenger's seat position ({feature}) {magnitude} {direction} them")
     
-    except Exception as e:
-        print(f"Error generating SHAP explanation: {e}")
-        print("Falling back to rule-based explanation:")
+#     except Exception as e:
+#         print(f"Error generating SHAP explanation: {e}")
+#         print("Falling back to rule-based explanation:")
         
-        # Rule-based explanation as fallback
-        if action_masks[action]:
-            print(f"- Passenger in seat {action} was selected based on the current boarding policy")
-            if action < num_of_seats // 2:
-                print(f"- This passenger is seated in the front half of the plane")
-            else:
-                print(f"- This passenger is seated in the back half of the plane")
+#         # Rule-based explanation as fallback
+#         if action_masks[action]:
+#             print(f"- Passenger in seat {action} was selected based on the current boarding policy")
+#             if action < num_of_seats // 2:
+#                 print(f"- This passenger is seated in the front half of the plane")
+#             else:
+#                 print(f"- This passenger is seated in the back half of the plane")
     
-    return action
+#     return action
 
-if __name__ == '__main__':
-    # train()
-    test("manual_save_3000000")
-    #############################################################################################################
-    explain_decision("manual_save_3000000")
+# if __name__ == '__main__':
+#     # train()
+#     test("manual_save_3000000")
+#     #############################################################################################################
+#     explain_decision("manual_save_3000000")
 
