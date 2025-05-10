@@ -74,15 +74,18 @@ class Lobby:
     def remove_passenger_by_seat(self, seat_num):
         for row in self.lobby_rows:
             for i, passenger in enumerate(row.passengers):
-                if passenger.seat_num == seat_num:
-                    passenger = row.passengers.pop(i)
-                    return passenger
+                if passenger is not None and passenger.seat_num == seat_num:
+                    removed_passenger = passenger
+                    row.passengers[i] = None
+                    return removed_passenger
 
 
     def count_passengers(self):
         count = 0
         for row in self.lobby_rows:
-            count += len(row.passengers)
+            for passenger in row.passengers:
+                if passenger is not None:
+                    count += 1
 
         return count
     
@@ -90,7 +93,7 @@ class Lobby:
         count = 0
         for row in self.lobby_rows:
             for passenger in row.passengers:
-                if  passenger.high_priority == True:
+                if passenger is not None and passenger.high_priority == True:
                     count += 1
 
         return count
@@ -99,7 +102,7 @@ class Lobby:
         count = 0
         for row in self.lobby_rows:
             for passenger in row.passengers:
-                if  passenger.high_priority == False:
+                if  passenger is not None and passenger.high_priority == False:
                     count += 1
 
         return count
@@ -280,10 +283,6 @@ class AirplaneEnv(gym.Env):
     # If necessary, decode obs → state and manually update self.lobby etc.
 
 
-
-
-
-
     # Returns an array of the number of passengers in line
     # def _get_observation(self):
     #     observation = [LobbyRow(row_num, self.seats_per_row) for row_num in range(self.num_of_rows)]
@@ -310,15 +309,13 @@ class AirplaneEnv(gym.Env):
 
         for row in self.lobby.lobby_rows:
             for passenger in row.passengers:
-                observation.append([
-                    passenger.seat_num,
-                    int(passenger.high_priority)  # Ensure it's int (0 or 1)
-                ])
-            
-            # Fill remaining seats in the row with -1s (empty seats)
-            empty_seats = self.seats_per_row - len(row.passengers)
-            for _ in range(empty_seats):
-                observation.append([-1, -1])
+                if passenger is None:
+                    observation.extend([-1, -1])
+
+                else:
+                    observation.extend([passenger.seat_num,
+                    int(passenger.high_priority)])
+                
 
         return np.array(observation, dtype=np.int32).flatten()
 
@@ -378,20 +375,6 @@ class AirplaneEnv(gym.Env):
 
         # Move line forward
         self.boarding_line.move_forward()
-
-        # step_counter = 0
-
-        # for row in self.airplane_rows:
-        #     step_counter +=1
-        #     for seat in row.seats:
-        #         if seat.passenger is not None and seat.passenger.status == PassengerStatus.SEATED:
-                    
-        #             if seat.passenger.seated_timer == 0:
-        #                 seat.passenger.seated_timer +=1
-                    
-        #             else:
-        #                 seat.passenger = None
-
         self.render()
 
     def render(self):
@@ -434,13 +417,14 @@ class AirplaneEnv(gym.Env):
 
     # This method is used to mask the actions that are allowed
     # action_masks() is the function signature required by the MaskablePPO class
-    def action_masks(self) -> list[bool]:
-        mask = [False] * (self.num_of_rows * self.seats_per_row)
+    def action_masks(self):
+        mask =np.zeros(self.num_of_seats, dtype =bool)
 
         for row in self.lobby.lobby_rows:
             for passenger in row.passengers:
                 if passenger is not None:
                     mask[passenger.seat_num] = True
+
 
         return mask
 
@@ -473,10 +457,11 @@ if __name__ == "__main__":
         observation, reward, terminated, _, _ = env.step(action)
         total_reward += reward
 
-        step_count+=1
+        step_count +=1
 
         print(f"Step {step_count} Action: {action}")
         print(f"Observation: {observation}")
         print(f"Reward: {reward}\n")
+        print(f"Mask: {masks}\n")
 
     print(f"Total Reward: {total_reward}")
