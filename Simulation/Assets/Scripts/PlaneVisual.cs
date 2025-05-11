@@ -1,5 +1,6 @@
 using UnityEngine;
 using DG.Tweening;
+using System.Collections;
 using System;
 
 public class PlaneVisual : MonoBehaviour
@@ -151,6 +152,13 @@ public class PlaneVisual : MonoBehaviour
     /// <param name="height">The height to set the plane at</param>
     public void Teleport(Vector3 position, float height)
     {
+        StartCoroutine(TeleportAfterDelay(position, height));
+    }
+
+    private IEnumerator TeleportAfterDelay(Vector3 position, float height)
+    {
+        // Wait for 2 seconds before teleporting
+        yield return new WaitForSeconds(2f);
         transform.position = new Vector3(position.x, height, position.z);
     }
 }

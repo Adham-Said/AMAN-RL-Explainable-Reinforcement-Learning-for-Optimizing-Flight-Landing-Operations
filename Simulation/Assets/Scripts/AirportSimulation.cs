@@ -28,7 +28,7 @@ public class AirportSimulation : MonoBehaviour
     [SerializeField] private SimulationMode simulationMode = SimulationMode.Basic;
     [SerializeField] public int NumberOfWaypoints = 10;
     [SerializeField] public int NumberOfServers = 10;
-    [SerializeField] private float MeanServiceTime = 7f;
+    [SerializeField] private float MeanServiceTime = 5f;
     [SerializeField] private int TotalPlanes = 20;
 
     [Header("Visualization")]
@@ -36,7 +36,9 @@ public class AirportSimulation : MonoBehaviour
 
     [Header("Simulation State")]
     public bool IsInitialized = false;
+    public float waitTime = 10f; // Time to wait between plane arrivals
     public int CurrentPlaneIndex = 0;
+    private float nextArrivalTime;
     private int[] ServerStatus; // 0 = idle, 1 = booked, 2 = serving
     private Planes planesManager;
     private bool IsArrivalClear = true;
@@ -138,18 +140,39 @@ public class AirportSimulation : MonoBehaviour
         Debug.Log($"Initialized {ServerPositions.Length} servers");
     }
 
-    private PlaneVisual CreatePlaneVisual()
+    private PlaneVisual CreatePlaneVisual(Plane plane)
     {
-        GameObject planeObj = Instantiate(AirlinerPrefab);
+        // Find the Spawn point
+        GameObject spawnPoint = GameObject.Find("Spawn");
+        if (spawnPoint == null)
+        {
+            Debug.LogError("Could not find 'Spawn' GameObject in the scene!");
+            return null;
+        }
+
+        // Create the plane at the spawn point
+        GameObject planeObj = Instantiate(AirlinerPrefab, spawnPoint.transform.position, Quaternion.identity);
         PlaneVisual visual = planeObj.AddComponent<PlaneVisual>();
-        Debug.Log($"Created plane visual at position {planeObj.transform.position}");
+        planeObj.name = $"Plane {plane.PlaneID}";
+        Debug.Log($"Created plane {planeObj.name} at spawn point");
         return visual;
     }
 
     public void StartSimulation()
     {
-        Debug.Log("Simulation started.");
-        CheckNextArrival();
+        Debug.Log("Simulation started. Waiting 10 seconds before starting arrivals...");
+        nextArrivalTime = Time.time + 10f; // Set the time for first arrival to 10 seconds from now
+    }
+
+    private void Update()
+    {
+        // Check if it's time for the next arrival
+        if (Time.time >= nextArrivalTime)
+        {
+            CheckNextArrival();
+            // Set next arrival time to a very large number to prevent multiple checks
+            nextArrivalTime = float.MaxValue;
+        }
     }
 
     private void CheckNextArrival()
@@ -191,13 +214,16 @@ public class AirportSimulation : MonoBehaviour
             Debug.Log("Searching for next important plane to land");
             // In Basic mode, prioritize high-priority planes first
             plane = allPlanes.FirstOrDefault(p => p.HighPriority == 1 && !p.IsProcessed);
-            Debug.Log($"Found {plane} plane");
-
+            
             // If no high-priority planes, get the next unprocessed plane
             if (plane == null)
             {
                 Debug.Log("No high-priority planes found, searching for next unprocessed plane");
                 plane = allPlanes.FirstOrDefault(p => !p.IsProcessed);
+            }
+            else
+            {
+                Debug.Log($"Found high-priority plane {plane.PlaneID}");
             }
         }
         else
@@ -230,7 +256,7 @@ public class AirportSimulation : MonoBehaviour
         plane.ServerIndex = serverIndex;
         
         // Create visual representation at arrival position
-        PlaneVisual visual = CreatePlaneVisual();
+        PlaneVisual visual = CreatePlaneVisual(plane);
         PlaneVisuals[plane] = visual;
         
         // Mark arrival runway as busy and server as busy
@@ -261,16 +287,29 @@ public class AirportSimulation : MonoBehaviour
             yield break;
         }
         
-        // Calculate positions relative to the runway
-        Vector3 runwayStart = new Vector3(0, 0, 100f);  // Start of runway
-        Vector3 runwayEnd = new Vector3(0, 0, 0);       // End of runway
+        // Find the Spawn point
+        GameObject spawnPoint = GameObject.Find("Spawn");
+        if (spawnPoint == null)
+        {
+            Debug.LogError("Could not find 'Spawn' GameObject in the scene!");
+            yield break;
+        }
         
-        // Teleport to approach position (above runway start)
-        visual.Teleport(runwayStart, PlaneFlyHeight);
-        yield return new WaitForSeconds(0.1f);
+        // Find the Arrival point
+        GameObject arrivalPoint = GameObject.Find("Arrival 1");
+        if (arrivalPoint == null)
+        {
+            Debug.LogError("Could not find 'Arrival 1' GameObject in the scene!");
+            yield break;
+        }
         
-        // Teleport to landing position (above runway end)
-        visual.Teleport(runwayEnd, PlaneLandingHeight);
+        // Ensure plane is at Spawn point first
+        visual.Teleport(spawnPoint.transform.position, PlaneFlyHeight);
+        yield return new WaitForSeconds(0.5f);
+        
+        // Then move to arrival point (runway)
+        visual.Teleport(arrivalPoint.transform.position, PlaneFlyHeight);
+
         yield return new WaitForSeconds(0.1f);
         
         // Teleport to server position
@@ -282,7 +321,10 @@ public class AirportSimulation : MonoBehaviour
         IsArrivalClear = true;
         
         Debug.Log($"Plane {plane.PlaneID} has landed at server {serverIndex}");
-        
+
+        CheckNextArrival();
+        CheckSimulationCompletion();
+
         // Start service and schedule departure
         StartCoroutine(ExecuteTeleportServiceAndDeparture(plane, visual, serverIndex));
     }
@@ -308,19 +350,36 @@ public class AirportSimulation : MonoBehaviour
         
         IsDepartureClear = false;
         
-        // Calculate runway positions for departure
-        Vector3 runwayStart = new Vector3(0, 0, 0);     // Start of runway
-        Vector3 runwayEnd = new Vector3(0, 0, -100f);    // End of runway
+        // Find the Departure 1 GameObject in the scene
+        GameObject departurePoint = GameObject.Find("Departure 1");
+        if (departurePoint == null)
+        {
+            Debug.LogError("Could not find 'Departure 1' GameObject in the scene!");
+            yield break;
+        }
         
-        // Teleport to runway start
-        visual.Teleport(runwayStart, PlaneLandingHeight);
+        // Find the Despawn point
+        GameObject despawnPoint = GameObject.Find("Despawn");
+        if (despawnPoint == null)
+        {
+            Debug.LogError("Could not find 'Despawn' GameObject in the scene!");
+            yield break;
+        }
+        
+        // Teleport to departure point
+        visual.Teleport(departurePoint.transform.position, PlaneLandingHeight);
         yield return new WaitForSeconds(0.1f);
         
-        // Take off from runway
-        visual.Teleport(runwayEnd, PlaneFlyHeight);
+        // Take off from runway (move to end of runway and gain altitude)
+        visual.Teleport(departurePoint.transform.position, PlaneFlyHeight);
+        yield return new WaitForSeconds(0.1f);
+        
+        // Teleport to despawn point
+        visual.Teleport(despawnPoint.transform.position, PlaneFlyHeight);
         
         // Update server status
         ServerStatus[serverIndex] = 0;
+        IsDepartureClear = true;
         Debug.Log($"Plane {plane.PlaneID} has departed from server {serverIndex}");
         
         // Record service completion
@@ -332,6 +391,12 @@ public class AirportSimulation : MonoBehaviour
         planeArrivalTimes.Remove(plane);
         planeServiceStartTimes.Remove(plane);
         PlaneVisuals.Remove(plane);
+        
+        // Destroy the plane object after a short delay
+        if (visual != null && visual.gameObject != null)
+        {
+            Destroy(visual.gameObject);
+        }
         
         CheckNextArrival();
         CheckSimulationCompletion();
