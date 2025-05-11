@@ -26,6 +26,41 @@ public class PlaneVisual : MonoBehaviour
     }
 
     /// <summary>
+    /// Spawns a plane at the specified waypoint with the given plane ID
+    /// </summary>
+    /// <param name="planeID">The ID of the plane</param>
+    /// <param name="waypointIndex">The index of the waypoint to spawn at</param>
+    /// <param name="airlinePrefab">The prefab to instantiate</param>
+    public static PlaneVisual SpawnPlane(float planeID, int waypointIndex, GameObject airlinePrefab, Vector3[] waypoints)
+    {
+        if (waypointIndex < 0 || waypointIndex >= waypoints.Length)
+        {
+            Debug.LogError("Invalid waypoint index: " + waypointIndex);
+            return null;
+        }
+
+        // Instantiate the plane prefab
+        GameObject planeObj = Instantiate(airlinePrefab);
+        PlaneVisual planeVisual = planeObj.GetComponent<PlaneVisual>();
+
+        if (planeVisual == null)
+        {
+            Debug.LogError("Plane prefab does not have PlaneVisual component");
+            Destroy(planeObj);
+            return null;
+        }
+
+        // Set the plane's position
+        Vector3 waypoint = waypoints[waypointIndex];
+        planeObj.transform.position = new Vector3(waypoint.x, AirportSimulation.PlaneFlyHeight, waypoint.z);
+
+        // Set the plane's ID
+        planeVisual.GetComponent<Plane>().PlaneID = planeID;
+
+        return planeVisual;
+    }
+
+    /// <summary>
     /// Performs a 90-degree turn around a waypoint
     /// </summary>
     /// <param name="waypoint">The waypoint to turn around</param>
@@ -85,5 +120,27 @@ public class PlaneVisual : MonoBehaviour
         seq.OnComplete(onComplete ?? (() => { }));
         
         seq.Play();
+    }
+
+    /// <summary>
+    /// Moves the plane to the specified position at the given height and speed
+    /// </summary>
+    /// <param name="targetPosition">The target position to move to (X and Z coordinates)</param>
+    /// <param name="height">The height to maintain during movement</param>
+    /// <param name="speed">The speed of movement</param>
+    /// <param name="onComplete">Callback when the movement is complete</param>
+    public void MoveTo(Vector3 targetPosition, float height, float speed, TweenCallback onComplete = null)
+    {
+        // Set the target position with the specified height
+        Vector3 targetPos = new Vector3(targetPosition.x, height, targetPosition.z);
+        
+        // Calculate duration based on distance and speed
+        float distance = Vector3.Distance(transform.position, targetPos);
+        float duration = distance / speed;
+
+        // Create and play the movement tween
+        transform.DOMove(targetPos, duration)
+            .SetEase(Ease.Linear)
+            .OnComplete(onComplete ?? (() => { }));
     }
 }

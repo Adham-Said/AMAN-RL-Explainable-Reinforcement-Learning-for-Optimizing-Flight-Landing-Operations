@@ -1155,6 +1155,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 838493221}
+  - component: {fileID: 838493222}
   m_Layer: 0
   m_Name: Airport Simulation
   m_TagString: Untagged
@@ -1177,6 +1178,27 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &838493222
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 838493220}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2dce13dafe041134c9df80b49712ae48, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  NumberOfWaypoints: 10
+  NumberOfServers: 10
+  MeanServiceTime: 30
+  TotalPlanes: 20
+  AirlinerPrefab: {fileID: 6310395581850640336, guid: 95a11933d1a681346aaa438b39bb0fe3, type: 3}
+  IsInitialized: 0
+  CurrentPlaneIndex: 0
+  Waypoints: []
+  ServerPositions: []
 --- !u!1 &1063430023
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,91 +1,46 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 using System.Collections;
 
-public class AirportSimulation : DES
+public class AirportSimulation : MonoBehaviour
 {
     public static AirportSimulation Instance { get; private set; }
 
     // Constants for visualization
-    private const float PlaneFlyHeight = 200f;
-    private const float PlaneLandingHeight = 4f;
-
-    private const float PlaneFlySpeed = 60f;
-    private const float PlaneLandingSpeed = 50f;
-    private const float PlaneTaxiSpeed = 50f;
-
-    private const float PlaneSize = 1f;
-    private const float PlaneSpeed = 9f;
-    private const float ArrivalPathLength = 45f;
-    private const float PlaneHeight = 0.5f;
+    public const float PlaneFlyHeight = 200f;
+    public const float PlaneLandingHeight = 4f;
+    public const float PlaneFlySpeed = 60f;
+    public const float PlaneLandingSpeed = 50f;
+    public const float PlaneTaxiSpeed = 50f;
+    public const float PlaneSize = 1f;
+    public const float PlaneSpeed = 9f;
+    public const float ArrivalPathLength = 45f;
+    public const float PlaneHeight = 0.5f;
 
     [Header("Simulation Parameters")]
     [SerializeField] public int NumberOfWaypoints = 10;
     [SerializeField] public int NumberOfServers = 10;
-    [SerializeField] public int NumberOfHolds = 4;
-    [SerializeField] public float MeanServiceTime = 3f;
-    [SerializeField] public float MeanArrivalTime = 1f;
-    [SerializeField] public int TotalArrivals = 10;
+    [SerializeField] private float MeanServiceTime = 30f;
+    [SerializeField] private int TotalPlanes = 20;
 
     [Header("Visualization")]
     [SerializeField] private GameObject AirlinerPrefab;
 
-    private int[] ServerStatus; //0= idle, 1= booked, 2= serving
-    private int[] HoldStatus; //0= idle, 1= booked, 2= serving
-    private float[] HoldBusyTime;
-    public int TotalPlanes = 0;
-    public int DelayedPlanes = 0;
-    public int DivertedPlanes = 0;
-    public float TotalDelayTime = 0f;
-    public float[] ServerUtilization;
-    public float[] ServerBusyTime;
-    private bool IsInitialized = false;
+    [Header("Simulation State")]
+    public bool IsInitialized = false;
+    public int CurrentPlaneIndex = 0;
+    private int[] ServerStatus; // 0 = idle, 1 = busy, 2 = blocked
+    private Planes planesManager;
     private bool IsArrivalClear = true;
     private bool IsDepartureClear = true;
 
     public Vector3[] Waypoints;
     public Vector3[] ServerPositions;
-    public Vector3[] HoldPositions;
     private float Clock = 0f;
-
     private Dictionary<Plane, PlaneVisual> PlaneVisuals = new Dictionary<Plane, PlaneVisual>();
 
-    public Vector3 GetWaypointsPosition(int index)
+    private void Awake()
     {
-        return (index >= 0 && index < Waypoints.Length) ? Waypoints[index] : Vector3.zero;
-    }
-
-    public Vector3 GetServerPosition(int index)
-    {
-        return (index >= 0 && index < ServerPositions.Length) ? ServerPositions[index] : Vector3.zero;
-    }
-
-    public Vector3 GetHoldPosition(int index)
-    {
-        return (index >= 0 && index < HoldPositions.Length) ? HoldPositions[index] : Vector3.zero;
-    }
-
-    public void SetParameters(int totalArrivals, float meanServiceTime, float meanArrivalTime, float timeScale = 1f)
-    {
-        this.TotalArrivals = totalArrivals;
-        this.MeanServiceTime = meanServiceTime;
-        this.MeanArrivalTime = meanArrivalTime;
-
-        ServerStatus = new int[NumberOfServers];
-        ServerUtilization = new float[NumberOfServers];
-        ServerBusyTime = new float[NumberOfServers];
-
-        HoldStatus = new int[NumberOfHolds];
-        HoldBusyTime = new float[NumberOfHolds];
-
-        IsInitialized = true;
-        Debug.Log($"Parameters set: Total Arrivals={totalArrivals}, Mean Service Time={meanServiceTime}, Mean Arrival Time={meanArrivalTime}");
-    }
-
-    protected override void Awake()
-    {
-        base.Awake();
         if (Instance == null)
         {
             Instance = this;
@@ -98,14 +53,37 @@ public class AirportSimulation : DES
 
         InitializeWaypoints();
         InitializeServerPositions();
-        InitializeHoldPositions();
     }
 
     private void Start()
     {
+        // Initialize the planes manager with planes and various status percentages
+        planesManager = new Planes();
+        planesManager.InitializePlanes(
+            numPlanes: TotalPlanes,
+            highPriorityPercentage: 20f,
+            meanServiceTime: MeanServiceTime
+        );
+
+        Debug.Log($"Initialized {planesManager.GetPlaneCount()} planes");
+        
+        if (!IsInitialized)
+        {
+            Debug.LogError("Simulation parameters not set! Call SetParameters() first.");
+            return;
+        }
+
         Debug.Log("Starting simulation setup...");
-        SetParameters(TotalArrivals, MeanServiceTime, MeanArrivalTime);
         StartSimulation();
+    }
+
+    public void SetParameters(int totalArrivals, float meanServiceTime)
+    {
+        this.MeanServiceTime = meanServiceTime;
+        this.TotalPlanes = totalArrivals;
+        ServerStatus = new int[NumberOfServers];
+        IsInitialized = true;
+        Debug.Log($"Parameters set: Mean Service Time={meanServiceTime}, Number of Servers={NumberOfServers}");
     }
 
     private void InitializeWaypoints()
@@ -144,134 +122,177 @@ public class AirportSimulation : DES
         }
     }
 
-    private void InitializeHoldPositions()
+    private PlaneVisual CreatePlaneVisual()
     {
-        HoldPositions = new Vector3[NumberOfHolds];
-        for (int i = 0; i < NumberOfHolds; i++)
-        {
-            GameObject hold = GameObject.Find($"Hold {i}");
-            if (hold != null)
-            {
-                HoldPositions[i] = hold.transform.position;
-                Debug.Log($"Hold {i} initialized at position {HoldPositions[i]}");
-            }
-            else
-            {
-                Debug.LogError($"Could not find hold {i} in the scene!");
-            }
-        }
+        GameObject planeObj = Instantiate(AirlinerPrefab);
+        PlaneVisual visual = planeObj.AddComponent<PlaneVisual>();
+        return visual;
     }
 
     public void StartSimulation()
     {
         Debug.Log("Simulation started.");
-        ScheduleNextArrival();
+        CheckAndHandleNextArrival();
     }
 
-    protected override void HandleEvent(SimEvent e)
+    private void CheckAndHandleNextArrival()
     {
-        string eventType = e.GetAttributeValue<string>("Type");
-        Debug.Log($"Handling event of type: {eventType} at time {Clock}");
-
-        switch (eventType)
+        // Only try to handle next arrival if we have planes left and conditions are met
+        if (CurrentPlaneIndex < planesManager.GetPlaneCount() && IsArrivalClear && FindIdleServer() != -1)
         {
-            case "start":
-                ScheduleNextArrival();
-                break;
-            case "arrival":
-                HandleArrival(e);
-                break;
-            case "Hold":
-                HandleHold(e);
-                break;
-            case "departure":
-                HandleDeparture(e);
-                break;
-            case "end":
-                Report();
-                break;
+            HandleArrival();
         }
     }
 
-    private void ScheduleNextArrival()
+    private void HandleArrival()
     {
-        Debug.Log("Scheduling next arrival...");
-        float nextArrivalTime = Clock + random.Exponential(MeanArrivalTime);
-        Debug.Log($"Scheduling next arrival at time: {nextArrivalTime}");
-        
-        SimEvent arrivalEvent = new SimEvent("arrival", nextArrivalTime);
-        Plane newPlane = new Plane(Clock);
-        arrivalEvent.AddAttribute("Plane", newPlane);
-        Schedule(arrivalEvent);
-    }
+        // Check if we can land a plane (runway clear and server available)
+        if (!IsArrivalClear)
+        {
+            Debug.Log("Arrival path is busy, waiting...");
+            return;
+        }
 
-    private void HandleArrival(SimEvent e)
-    {
-        TotalPlanes++;
-        Plane plane = e.GetAttributeValue<Plane>("Plane");
-        Debug.Log($"Handling arrival of plane {TotalPlanes} at time {Clock}");
+        int serverIndex = FindIdleServer();
+        if (serverIndex == -1)
+        {
+            Debug.Log("No available servers, waiting...");
+            return;
+        }
+
+        // Get the next plane
+        var allPlanes = planesManager.GetAllPlanes();
+        if (CurrentPlaneIndex >= allPlanes.Count)
+        {
+            Debug.Log("No more planes to process");
+            CheckSimulationCompletion();
+            return;
+        }
+
+        Plane plane = allPlanes[CurrentPlaneIndex];
+        if (plane == null)
+        {
+            Debug.LogError($"Failed to get plane at index {CurrentPlaneIndex}");
+            return;
+        }
+
+        Debug.Log($"Handling arrival of plane {plane.PlaneID} at time {Clock}");
+        
+        // Mark the plane as being serviced
+        plane.ServerIndex = serverIndex;
         
         // Create visual representation at arrival position
         PlaneVisual visual = CreatePlaneVisual();
         PlaneVisuals[plane] = visual;
         
-        // Checks if their are idle server and the airstrip is clear
-        int serverIndex = FindIdleServer();
-        if (serverIndex == -1) 
-        {
-            Debug.Log($"No idle server found for plane {TotalPlanes}, adding plane {TotalPlanes} to hold");
-            AddToHold(plane);
-            if (!IsArrivalWayClear())
-            {
-                Debug.Log($"There is already other plane landing, adding plane {TotalPlanes} to hold");
-                AddToHold(plane);
-            }   
-        }
-
+        // Mark arrival runway as busy and server as busy
         IsArrivalClear = false;
-        Debug.Log($"Arrival runway is busy landing plane {TotalPlanes}");
-
         ServerStatus[serverIndex] = 1;
-        Debug.Log($"Booking server {serverIndex} for plane {TotalPlanes}");
-
-        Debug.Log($"Plane {TotalPlanes} is landing");
-        // Start the plane at arrival position
         
+        Debug.Log($"Plane {plane.PlaneID} is landing and will be serviced at server {serverIndex}");
+        
+        // Start landing sequence
+        StartCoroutine(ExecuteLandingSequence(plane, visual, serverIndex));
+        
+        // Move to next plane for next arrival
+        CurrentPlaneIndex++;
+        
+        // Check if there are more planes to process
+        if (CurrentPlaneIndex < allPlanes.Count)
+        {
+            Debug.Log("Waiting for next available slot to land next plane");
+        }
+        else
+        {
+            Debug.Log("No more planes to arrive");
+        }
+    }
+
+    private IEnumerator ExecuteLandingSequence(Plane plane, PlaneVisual visual, int serverIndex)
+    {
         // Approach
         visual.MoveBetweenWaypoints(Waypoints[0], Waypoints[1], PlaneFlyHeight, PlaneFlyHeight, PlaneFlySpeed, PlaneFlySpeed);
-
+        yield return new WaitForSeconds(1.5f);
+        
         // Descend
         visual.MoveBetweenWaypoints(Waypoints[1], Waypoints[2], PlaneFlyHeight, PlaneLandingHeight, PlaneFlySpeed, PlaneLandingSpeed);
-
+        yield return new WaitForSeconds(1.5f);
+        
         // Land
         visual.MoveBetweenWaypoints(Waypoints[2], Waypoints[3], PlaneLandingHeight, PlaneLandingHeight, PlaneLandingSpeed, PlaneTaxiSpeed);
+        yield return new WaitForSeconds(2f);
         
-        IsArrivalClear = true;
-
-        Debug.Log($"Plane {TotalPlanes} is done landing, arrival runway is clear, heading to server {serverIndex}");
-
-        if (serverIndex < 6){
-            //WIP
-        }
-        else
-        {
-            //WIP
-        }
-
-        // Plane reached the server
+        // Move to server position
+        Vector3 serverPosition = ServerPositions[serverIndex];
+        visual.MoveTo(serverPosition, PlaneLandingHeight, PlaneTaxiSpeed);
+        
+        // Mark server as in service
         ServerStatus[serverIndex] = 2;
         
-        // Schedule next arrival if we haven't reached total arrivals
-        if (TotalPlanes < TotalArrivals)
+        // Clear arrival runway
+        IsArrivalClear = true;
+        
+        Debug.Log($"Plane {plane.PlaneID} has arrived at server {serverIndex}");
+        
+        // Check if we can land another plane now that the runway is clear
+        CheckAndHandleNextArrival();
+        
+        // Start service and schedule departure
+        StartCoroutine(ExecuteServiceAndDeparture(plane, visual, serverIndex));
+    }
+
+    private IEnumerator ExecuteServiceAndDeparture(Plane plane, PlaneVisual visual, int serverIndex)
+    {
+        // Service the plane (wait for service time)
+        float serviceTime = plane.ServiceTime;
+        Debug.Log($"Servicing plane {plane.PlaneID} for {serviceTime} seconds at server {serverIndex}");
+        yield return new WaitForSeconds(serviceTime);
+        
+        // Handle departure
+        yield return StartCoroutine(ExecuteDepartureSequence(plane, visual, serverIndex));
+    }
+
+    private IEnumerator ExecuteDepartureSequence(Plane plane, PlaneVisual visual, int serverIndex)
+    {
+        // Wait for departure way to be clear
+        while (!IsDepartureWayClear())
         {
-            Debug.Log($"Plane {TotalPlanes} is at server {serverIndex}, scheduling next arrival");
-            ScheduleNextArrival();
+            yield return new WaitForSeconds(0.5f);
         }
-        else
+        
+        // Mark departure way as busy
+        IsDepartureClear = false;
+        
+        // Taxi to departure position
+        visual.MoveTo(Waypoints[3], PlaneLandingHeight, PlaneTaxiSpeed);
+        yield return new WaitForSeconds(1f);
+        
+        // Take off
+        visual.MoveBetweenWaypoints(Waypoints[3], Waypoints[4], PlaneLandingHeight, PlaneFlyHeight, PlaneTaxiSpeed, PlaneFlySpeed);
+        
+        // Clear the server
+        ServerStatus[serverIndex] = 0;
+        
+        // Mark departure way as clear
+        IsDepartureClear = true;
+        
+        Debug.Log($"Plane {plane.PlaneID} has departed from server {serverIndex}");
+        
+        // Remove the plane visual after it's out of sight
+        yield return new WaitForSeconds(2f);
+        if (visual != null && visual.gameObject != null)
         {
-            Debug.Log($"Plane {TotalPlanes} is at server {serverIndex}, simulation is complete");
-            CheckSimulationCompletion();
+            Destroy(visual.gameObject);
         }
+        
+        // Remove from tracking
+        PlaneVisuals.Remove(plane);
+        
+        // Check if we can land another plane now that a server is free
+        CheckAndHandleNextArrival();
+        
+        // Check if simulation is complete
+        CheckSimulationCompletion();
     }
 
     private int FindIdleServer()
@@ -284,97 +305,23 @@ public class AirportSimulation : DES
         return -1;
     }
 
-    private int FindIdleHold()
+    private bool IsArrivalWayClear()
     {
-        for (int i = 0; i < HoldStatus.Length; i++)
-        {
-            if (HoldStatus[i] == 0)
-                return i;
-        }
-        return -1;
-    }
-
-    private bool IsArrivalWayClear(){
         return IsArrivalClear;
     }
 
-    private bool IsDepartureWayClear(){
+    private bool IsDepartureWayClear()
+    {
         return IsDepartureClear;
     }
-
-
 
     private void StartService(Plane plane, int serverIndex)
     {
         ServerStatus[serverIndex] = 2;
-        Debug.Log($"Plane {plane} assigned to server {serverIndex}.");
+        Debug.Log($"Plane {plane.PlaneID} assigned to server {serverIndex}.");
     }
 
-    private void StartHold(Plane plane, int holdIndex)
-    {
-        HoldStatus[holdIndex] = 2;
-        Debug.Log($"Plane {plane} assigned to hold {holdIndex}.");
-    }
-
-    private PlaneVisual CreatePlaneVisual()
-    {
-        GameObject planeObj = Instantiate(AirlinerPrefab);
-        PlaneVisual visual = planeObj.AddComponent<PlaneVisual>();
-        return visual;
-    }
-
-    private void AddToHold(Plane plane)
-    {
-        int holdIndex = FindIdleHold();
-        if (holdIndex != -1)
-        {
-            Debug.Log($"Adding plane {plane} to hold {holdIndex}");
-            HoldStatus[holdIndex] = 1;
-
-            // PlaneVisual visual = PlaneVisuals[plane];
-            // visual.ApproachHold(
-            //     HoldPositions, // pass the HoldPositions array
-            //     holdIndex, // pass the holdIndex
-            //     PlaneFlyHeight, // approach height
-            //     PlaneFlySpeed // approach speed
-            // );
-
-            SimEvent releaseEvent = new SimEvent("releaseHold", Clock);
-            releaseEvent.AddAttribute("HoldIndex", holdIndex);
-            releaseEvent.AddAttribute("Plane", plane);
-            Schedule(releaseEvent);
-        }
-        else
-        {
-            Debug.LogError($"No available hold for plane {plane}. Plane is diverted.");
-            DivertedPlanes++;
-        }
-    }
-
-    private void HandleHold(SimEvent e)
-    {
-        int holdIndex = e.GetAttributeValue<int>("HoldIndex");
-        Plane plane = e.GetAttributeValue<Plane>("Plane");
-
-        int serverIndex = FindIdleServer();
-        if (serverIndex != -1)
-        {
-            Debug.Log($"Releasing plane {plane} from hold {holdIndex} to server {serverIndex}");
-            HoldStatus[holdIndex] = 0;
-            StartService(plane, serverIndex);
-        }
-        else
-        {
-            Debug.Log($"No idle server available for plane {plane} in hold {holdIndex}. Rescheduling release.");
-            SimEvent rescheduleEvent = new SimEvent("releaseHold", Clock + 1f);
-            rescheduleEvent.AddAttribute("HoldIndex", holdIndex);
-            rescheduleEvent.AddAttribute("Plane", plane);
-            Schedule(rescheduleEvent);
-        }
-    }
-
-
-    private void HandleDeparture(SimEvent e)
+    private void HandleDeparture()
     {
         Debug.Log("Departure logic not implemented yet.");
     }
@@ -382,20 +329,32 @@ public class AirportSimulation : DES
     // Checks if all planes have completed their arrivals and ends the simulation, then calls for the report
     private void CheckSimulationCompletion()
     {
-        if (TotalPlanes == TotalArrivals)
+        if (CurrentPlaneIndex >= planesManager.GetPlaneCount() && PlaneVisuals.Count == 0)
         {
-            Debug.Log("Simulation complete: All planes have arrived. Generating report...");
-            Report();
-        }
-        else
-        {
-            Debug.Log($"Simulation not complete: {TotalPlanes} of {TotalArrivals} planes have arrived.");
+            bool allServersIdle = true;
+            foreach (var status in ServerStatus)
+            {
+                if (status != 0)
+                {
+                    allServersIdle = false;
+                    break;
+                }
+            }
+            
+            if (allServersIdle)
+            {
+                Debug.Log("Simulation complete: All planes have been processed and all servers are idle. Generating report...");
+                Report();
+            }
         }
     }
-
-    public override void Report()
+        
+    public void Report()
     {
         Debug.Log("Simulation report generated.");
         // Add logic to generate and print the simulation report
     }
+
 }
+
+   

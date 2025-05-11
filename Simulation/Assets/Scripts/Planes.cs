@@ -1,30 +1,63 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+
+[Serializable]
+public class PlaneDTO
+{
+    public float PlaneID { get; set; }
+    public int HighPriority { get; set; }
+    
+    public PlaneDTO(float planeID, int highPriority)
+    {
+        PlaneID = planeID;
+        HighPriority = highPriority; // 1 for high priority, 0 for low priority
+    }
+}
+
+[Serializable]
+public class Plane
+{
+    public float PlaneID { get; set; }
+    public float ServiceTime { get; set; }
+    public int ServerIndex { get; set; }
+    public int HighPriority { get; set; }
+
+    public Plane(float planeID, float serviceTime,
+        int serverIndex, int highPriority)
+    {
+        PlaneID = planeID;
+        ServiceTime = serviceTime;
+        ServerIndex = serverIndex;
+        HighPriority = highPriority;
+    }
+
+    // Default constructor for serialization
+    public Plane()
+    {
+    }
+}
 
 public class Planes
 {
     private List<Plane> planes;
-    private Random random;
+    private System.Random random;
 
     public Planes()
     {
         planes = new List<Plane>();
-        random = new Random();
+        random = new System.Random();
     }
 
     /// <summary>
     /// Initializes a collection of planes with randomized statuses based on provided percentages
     /// </summary>
     /// <param name="numPlanes">Total number of planes to create</param>
-    /// <param name="lowFuelPercentage">Percentage of planes with low fuel (0-100)</param>
-    /// <param name="inTransitPercentage">Percentage of planes in transit (0-100)</param>
     /// <param name="highPriorityPercentage">Percentage of high priority planes (0-100)</param>
-    /// <param name="emergencyPercentage">Percentage of emergency planes (0-100)</param>
     public void InitializePlanes(int numPlanes,
-     float lowFuelPercentage, float inTransitPercentage, 
-     float highPriorityPercentage, float emergencyPercentage,
-     float meanServiceTime)
+        float highPriorityPercentage,
+        float meanServiceTime)
     {
         planes.Clear();
         
@@ -35,21 +68,14 @@ public class Planes
             float serviceTime = random.Next((int)meanServiceTime - 5, (int)meanServiceTime + 10);
 
             // Generate random status based on percentages
-            bool isLowFuel = random.Next(0, 100) < lowFuelPercentage;
-            bool isInTransit = random.Next(0, 100) < inTransitPercentage;
-            bool isHighPriority = random.Next(0, 100) < highPriorityPercentage;
-            bool isEmergency = random.Next(0, 100) < emergencyPercentage;
+            int isHighPriority = random.Next(0, 100) < highPriorityPercentage ? 1 : 0;
 
             // Create and add plane
             planes.Add(new Plane(
                 planeID,
                 serviceTime,
                 -1, // No server assigned initially
-                -1, // No hold assigned initially
-                isLowFuel,
-                isInTransit,
-                isHighPriority,
-                isEmergency));
+                isHighPriority));
         }
     }
 
@@ -73,6 +99,15 @@ public class Planes
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Gets an array of simplified plane data for Python integration
+    /// </summary>
+    /// <returns>Array of PlaneDTO objects containing only PlaneID and HighPriority</returns>
+    public PlaneDTO[] GetPlanesForPython()
+    {
+        return planes.Select(p => new PlaneDTO(p.PlaneID, p.HighPriority)).ToArray();
     }
 
     /// <summary>
@@ -116,13 +151,9 @@ public class Planes
     /// <summary>
     /// Gets planes with specific status
     /// </summary>
-    public List<Plane> GetPlanesByStatus(bool lowFuel = false, bool inTransit = false, 
-        bool highPriority = false, bool emergency = false)
+    public List<Plane> GetPlanesByStatus(int highPriority = 0)
     {
         return planes.FindAll(p => 
-            (p.FuelLow == lowFuel) && 
-            (p.InTransit == inTransit) && 
-            (p.HighPriority == highPriority) && 
-            (p.Emergency == emergency));
+            (p.HighPriority == highPriority));
     }
 }
