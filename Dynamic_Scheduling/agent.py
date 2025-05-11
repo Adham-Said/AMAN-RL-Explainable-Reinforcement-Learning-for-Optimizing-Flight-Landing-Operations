@@ -106,7 +106,8 @@ def test(model_name, render=True, explain=True):
             return probs.numpy()
 
         # Background data: 100 random samples from the observation space
-        background = np.array([env.observation_space.sample() for _ in range(100)])
+        background = np.array([env.observation_space.sample() for _ in range(100)])  
+        #background = collect_data(env, model, 50)
         explainer = shap.Explainer(shap_model, background)
         shap_values = explainer(obs.reshape(1, -1))
         ###############3
@@ -201,7 +202,7 @@ def explain_decision(model_name="manual_save_5400000"):
     action, _ = model.predict(observation=obs, deterministic=True, action_masks=action_masks)
     
     # Print decision
-    print(f"\n✈️ Decision: Selected airplane in seat {action} to board next")
+    print(f"\n Decision: Selected airplane  {action} to land next ")
     
     # Prepare observation for SHAP
     obs_input = obs.reshape(1, -1)
@@ -227,9 +228,9 @@ def explain_decision(model_name="manual_save_5400000"):
     #     if selected:
     #         seat_num, fuel_level, idx = selected
     #         if fuel_level == 1:  # Low fuel
-    #             print(f"- airplane in seat {seat_num} was selected because they have low fuel reserves")
+    #             print(f"- airplane  {seat_num} was selected because they have low fuel reserves")
     #         else:
-    #             print(f"- airplane in seat {seat_num} was selected based on optimal boarding sequence")
+    #             print(f"- airplane  {seat_num} was selected based on optimal boarding sequence")
                 
     #         # Compare with other airplanes
     #         other_low_fuel = [p for p in airplanes if p[1] == 1 and p[0] != seat_num]
@@ -278,7 +279,7 @@ def explain_decision(model_name="manual_save_5400000"):
             for i in top_indices:
                 if abs(values[i]) > 0.01:  # Only show significant contributions
                     print("\n🔍 SHAP Explanation for controller:")
-                    print(f"The system selected airplane in seat {action} because:")
+                    print(f"The system selected airplane  {action} because:")
                     feature = feature_names[i]
                     direction = "prioritized" if values[i] > 0 else "deprioritized"
                     magnitude = "strongly" if abs(values[i]) > 0.1 else "somewhat"
@@ -294,7 +295,7 @@ def explain_decision(model_name="manual_save_5400000"):
         
         # Rule-based explanation as fallback
         if action_masks[action]:
-            print(f"- airplane in seat {action} was selected based on the current boarding policy")
+            print(f"- airplane  {action} was selected based on the current boarding policy")
             if action < num_of_seats // 2:
                 print(f"- This airplane is seated in the front half of the plane")
             else:
@@ -445,19 +446,6 @@ class SINDySimEnv(gym.Env):
     
 
 from stable_baselines3 import PPO
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 if __name__ == '__main__':
