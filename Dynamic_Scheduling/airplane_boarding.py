@@ -33,17 +33,28 @@ class Passenger:
     def __init__(self, seat_num, row_num):
         self.seat_num = seat_num
         self.row_num = row_num
-        self.low_fuel = np.random.choice([True, False])
+        self.low_fuel = np.random.choice([True, False], p = [0.3, 0.7])
         self.is_holding_luggage = True
         self.status = PassengerStatus.MOVING
+        self.MST = np.random.choice([5, 10, 15], p = [0.15, 0.15, 0.7])
+        self.in_transit = np.random.choice([True, False], p = [0.1, 0.9])
         self.seated_timer = 0
+        
+        if self.in_transit or self.MST in [5, 10] or self.low_fuel == True:
+            self.high_priority = True
+
+        else:
+            self.high_priority =  False
+
+        
+
 
     # Returns the string representation of the Passenger class i.e. 2 digit seat number
     def __str__(self):
-        if self.low_fuel == True:    
-            return f"L{self.seat_num:02d}"
-        else:
+        if self.high_priority == True:    
             return f"H{self.seat_num:02d}"
+        else:
+            return f"L{self.seat_num:02d}"
 
 class LobbyRow:
     def __init__(self, row_num, seats_per_row):
@@ -63,32 +74,35 @@ class Lobby:
     def remove_passenger_by_seat(self, seat_num):
         for row in self.lobby_rows:
             for i, passenger in enumerate(row.passengers):
-                if passenger.seat_num == seat_num:
-                    passenger = row.passengers.pop(i)
-                    return passenger
+                if passenger is not None and passenger.seat_num == seat_num:
+                    removed_passenger = passenger
+                    row.passengers[i] = None
+                    return removed_passenger
 
 
     def count_passengers(self):
         count = 0
         for row in self.lobby_rows:
-            count += len(row.passengers)
-
-        return count
-    
-    def num_low_fuel_passengers_in_lobby(self):
-        count = 0
-        for row in self.lobby_rows:
             for passenger in row.passengers:
-                if  passenger.low_fuel == True:
+                if passenger is not None:
                     count += 1
 
         return count
     
-    def num_high_fuel_passengers_in_lobby(self):
+    def num_high_priority_passengers_in_lobby(self):
         count = 0
         for row in self.lobby_rows:
             for passenger in row.passengers:
-                if  passenger.low_fuel == False:
+                if passenger is not None and passenger.high_priority == True:
+                    count += 1
+
+        return count
+    
+    def num_low_priority_passengers_in_lobby(self):
+        count = 0
+        for row in self.lobby_rows:
+            for passenger in row.passengers:
+                if  passenger is not None and passenger.high_priority == False:
                     count += 1
 
         return count
@@ -198,10 +212,10 @@ class Seat:
         if self.passenger is None:
             return f"S{self.seat_num:02d}"
         else:
-            if self.passenger.low_fuel == True: 
-                return f"L{self.seat_num:02d}"
-            else:
+            if self.passenger.high_priority == True: 
                 return f"H{self.seat_num:02d}"
+            else:
+                return f"L{self.seat_num:02d}"
 
 
 class AirplaneRow:
@@ -237,7 +251,7 @@ class AirplaneEnv(gym.Env):
 
         # Define the Observation space.
         # The observation space is used to validate the observation returned by reset() and step().
-        # [0,-1,1,-1,2,-1....,6,2,7,1.....]
+        # [0,1,1,0,-1,-1....,6,0,7,1.....]
         self.observation_space = spaces.Box(
             low=-1,
             high=self.num_of_seats-1,
@@ -256,6 +270,18 @@ class AirplaneEnv(gym.Env):
         self.render()
 
         return self._get_observation(), {}
+    
+
+
+    def set_custom_observation(self, obs):
+        # Ensure lobby and any dependent variables are set up
+        if not hasattr(self, "lobby") or self.lobby is None:
+            self.reset()
+
+        # Set the observation manually
+        self.current_obs = obs
+    # If necessary, decode obs → state and manually update self.lobby etc.
+
 
     # Returns an array of the number of passengers in line
     # def _get_observation(self):
@@ -283,15 +309,13 @@ class AirplaneEnv(gym.Env):
 
         for row in self.lobby.lobby_rows:
             for passenger in row.passengers:
-                observation.append([
-                    passenger.seat_num,
-                    int(passenger.low_fuel)  # Ensure it's int (0 or 1)
-                ])
-            
-            # Fill remaining seats in the row with -1s (empty seats)
-            empty_seats = self.seats_per_row - len(row.passengers)
-            for _ in range(empty_seats):
-                observation.append([-1, -1])
+                if passenger is None:
+                    observation.extend([-1, -1])
+
+                else:
+                    observation.extend([passenger.seat_num,
+                    int(passenger.high_priority)])
+                
 
         return np.array(observation, dtype=np.int32).flatten()
 
@@ -325,7 +349,7 @@ class AirplaneEnv(gym.Env):
         return self._get_observation(), reward, terminated, False, {}
 
     def _calculate_reward(self):
-        reward = -self.lobby.num_low_fuel_passengers_in_lobby() + self.lobby.num_high_fuel_passengers_in_lobby()
+        reward = -self.lobby.num_high_priority_passengers_in_lobby() + self.lobby.num_low_priority_passengers_in_lobby()
         return reward
 
     def is_onboarding(self):
@@ -351,20 +375,6 @@ class AirplaneEnv(gym.Env):
 
         # Move line forward
         self.boarding_line.move_forward()
-
-        # step_counter = 0
-
-        # for row in self.airplane_rows:
-        #     step_counter +=1
-        #     for seat in row.seats:
-        #         if seat.passenger is not None and seat.passenger.status == PassengerStatus.SEATED:
-                    
-        #             if seat.passenger.seated_timer == 0:
-        #                 seat.passenger.seated_timer +=1
-                    
-        #             else:
-        #                 seat.passenger = None
-
         self.render()
 
     def render(self):
@@ -407,13 +417,14 @@ class AirplaneEnv(gym.Env):
 
     # This method is used to mask the actions that are allowed
     # action_masks() is the function signature required by the MaskablePPO class
-    def action_masks(self) -> list[bool]:
-        mask = [False] * (self.num_of_rows * self.seats_per_row)
+    def action_masks(self):
+        mask =np.zeros(self.num_of_seats, dtype =bool)
 
         for row in self.lobby.lobby_rows:
             for passenger in row.passengers:
                 if passenger is not None:
                     mask[passenger.seat_num] = True
+
 
         return mask
 
@@ -446,10 +457,11 @@ if __name__ == "__main__":
         observation, reward, terminated, _, _ = env.step(action)
         total_reward += reward
 
-        step_count+=1
+        step_count +=1
 
         print(f"Step {step_count} Action: {action}")
         print(f"Observation: {observation}")
         print(f"Reward: {reward}\n")
+        print(f"Mask: {masks}\n")
 
     print(f"Total Reward: {total_reward}")
