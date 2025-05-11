@@ -143,4 +143,14 @@ public class PlaneVisual : MonoBehaviour
             .SetEase(Ease.Linear)
             .OnComplete(onComplete ?? (() => { }));
     }
+
+    /// <summary>
+    /// Instantly moves the plane to the specified position and height
+    /// </summary>
+    /// <param name="position">The target position (X and Z coordinates)</param>
+    /// <param name="height">The height to set the plane at</param>
+    public void Teleport(Vector3 position, float height)
+    {
+        transform.position = new Vector3(position.x, height, position.z);
+    }
 }

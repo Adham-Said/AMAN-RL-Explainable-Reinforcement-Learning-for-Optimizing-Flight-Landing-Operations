@@ -23,6 +23,8 @@ public class Plane
     public float ServiceTime { get; set; }
     public int ServerIndex { get; set; }
     public int HighPriority { get; set; }
+    public float ArrivalTime { get; set; }
+    public bool IsProcessed { get; set; }
 
     public Plane(float planeID, float serviceTime,
         int serverIndex, int highPriority)
@@ -31,11 +33,13 @@ public class Plane
         ServiceTime = serviceTime;
         ServerIndex = serverIndex;
         HighPriority = highPriority;
+        IsProcessed = false;
     }
 
     // Default constructor for serialization
     public Plane()
     {
+        IsProcessed = false;
     }
 }
 
@@ -65,7 +69,7 @@ public class Planes
         {
             // Generate generic data
             float planeID = i + 1;
-            float serviceTime = random.Next((int)meanServiceTime - 5, (int)meanServiceTime + 10);
+            float serviceTime = random.Next((int)meanServiceTime - 2, (int)meanServiceTime + 2);
 
             // Generate random status based on percentages
             int isHighPriority = random.Next(0, 100) < highPriorityPercentage ? 1 : 0;

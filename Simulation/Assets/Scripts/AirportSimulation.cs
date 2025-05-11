@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Collections;
+using System.Linq;
 
 public class AirportSimulation : MonoBehaviour
 {
@@ -17,10 +18,17 @@ public class AirportSimulation : MonoBehaviour
     public const float ArrivalPathLength = 45f;
     public const float PlaneHeight = 0.5f;
 
+    public enum SimulationMode
+    {
+        Basic,
+        AgentBased
+    }
+
     [Header("Simulation Parameters")]
+    [SerializeField] private SimulationMode simulationMode = SimulationMode.Basic;
     [SerializeField] public int NumberOfWaypoints = 10;
     [SerializeField] public int NumberOfServers = 10;
-    [SerializeField] private float MeanServiceTime = 30f;
+    [SerializeField] private float MeanServiceTime = 7f;
     [SerializeField] private int TotalPlanes = 20;
 
     [Header("Visualization")]
@@ -29,7 +37,7 @@ public class AirportSimulation : MonoBehaviour
     [Header("Simulation State")]
     public bool IsInitialized = false;
     public int CurrentPlaneIndex = 0;
-    private int[] ServerStatus; // 0 = idle, 1 = busy, 2 = blocked
+    private int[] ServerStatus; // 0 = idle, 1 = booked, 2 = serving
     private Planes planesManager;
     private bool IsArrivalClear = true;
     private bool IsDepartureClear = true;
@@ -38,6 +46,9 @@ public class AirportSimulation : MonoBehaviour
     public Vector3[] ServerPositions;
     private float Clock = 0f;
     private Dictionary<Plane, PlaneVisual> PlaneVisuals = new Dictionary<Plane, PlaneVisual>();
+    private Report simulationReport;
+    private Dictionary<Plane, float> planeArrivalTimes = new Dictionary<Plane, float>();
+    private Dictionary<Plane, float> planeServiceStartTimes = new Dictionary<Plane, float>();
 
     private void Awake()
     {
@@ -51,17 +62,21 @@ public class AirportSimulation : MonoBehaviour
             return;
         }
 
+        // Initialize ServerStatus array with default size
+        ServerStatus = new int[NumberOfServers];
+        
         InitializeWaypoints();
         InitializeServerPositions();
     }
 
     private void Start()
     {
+        simulationReport = new Report(NumberOfServers);
         // Initialize the planes manager with planes and various status percentages
         planesManager = new Planes();
         planesManager.InitializePlanes(
             numPlanes: TotalPlanes,
-            highPriorityPercentage: 20f,
+            highPriorityPercentage: 10f,
             meanServiceTime: MeanServiceTime
         );
 
@@ -81,9 +96,8 @@ public class AirportSimulation : MonoBehaviour
     {
         this.MeanServiceTime = meanServiceTime;
         this.TotalPlanes = totalArrivals;
-        ServerStatus = new int[NumberOfServers];
         IsInitialized = true;
-        Debug.Log($"Parameters set: Mean Service Time={meanServiceTime}, Number of Servers={NumberOfServers}");
+        Debug.Log($"Parameters set: Mean Service Time={meanServiceTime}, Number of Servers={NumberOfServers}, TotalPlanes={totalArrivals}");
     }
 
     private void InitializeWaypoints()
@@ -102,6 +116,7 @@ public class AirportSimulation : MonoBehaviour
                 Debug.LogError($"Could not find Waypoint {i} in the scene!");
             }
         }
+        Debug.Log($"Initialized {Waypoints.Length} waypoints");
     }
 
     private void InitializeServerPositions()
@@ -120,27 +135,34 @@ public class AirportSimulation : MonoBehaviour
                 Debug.LogError($"Could not find server {i} in the scene!");
             }
         }
+        Debug.Log($"Initialized {ServerPositions.Length} servers");
     }
 
     private PlaneVisual CreatePlaneVisual()
     {
         GameObject planeObj = Instantiate(AirlinerPrefab);
         PlaneVisual visual = planeObj.AddComponent<PlaneVisual>();
+        Debug.Log($"Created plane visual at position {planeObj.transform.position}");
         return visual;
     }
 
     public void StartSimulation()
     {
         Debug.Log("Simulation started.");
-        CheckAndHandleNextArrival();
+        CheckNextArrival();
     }
 
-    private void CheckAndHandleNextArrival()
+    private void CheckNextArrival()
     {
+        Debug.Log($"Checking next arrival. CurrentPlaneIndex={CurrentPlaneIndex}, planesManager.GetPlaneCount()={planesManager.GetPlaneCount()}, IsArrivalClear={IsArrivalClear}, FindIdleServer()={FindIdleServer()}");
         // Only try to handle next arrival if we have planes left and conditions are met
         if (CurrentPlaneIndex < planesManager.GetPlaneCount() && IsArrivalClear && FindIdleServer() != -1)
         {
             HandleArrival();
+        }
+        else
+        {
+            Debug.Log("Conditions not met for next arrival. Waiting...");
         }
     }
 
@@ -160,21 +182,47 @@ public class AirportSimulation : MonoBehaviour
             return;
         }
 
-        // Get the next plane
+        // Get the next plane based on simulation mode
+        Plane plane = null;
         var allPlanes = planesManager.GetAllPlanes();
-        if (CurrentPlaneIndex >= allPlanes.Count)
+        
+        if (simulationMode == SimulationMode.Basic)
+        {
+            Debug.Log("Searching for next important plane to land");
+            // In Basic mode, prioritize high-priority planes first
+            plane = allPlanes.FirstOrDefault(p => p.HighPriority == 1 && !p.IsProcessed);
+            Debug.Log($"Found {plane} plane");
+
+            // If no high-priority planes, get the next unprocessed plane
+            if (plane == null)
+            {
+                Debug.Log("No high-priority planes found, searching for next unprocessed plane");
+                plane = allPlanes.FirstOrDefault(p => !p.IsProcessed);
+            }
+        }
+        else
+        {
+            // Agent-Based mode (to be implemented)
+            // For now, just get the next unprocessed plane in order
+            if (CurrentPlaneIndex < allPlanes.Count)
+            {
+                plane = allPlanes[CurrentPlaneIndex];
+            }
+        }
+
+        if (plane == null)
         {
             Debug.Log("No more planes to process");
             CheckSimulationCompletion();
             return;
         }
-
-        Plane plane = allPlanes[CurrentPlaneIndex];
-        if (plane == null)
-        {
-            Debug.LogError($"Failed to get plane at index {CurrentPlaneIndex}");
-            return;
-        }
+        
+        // Mark the plane as processed
+        plane.IsProcessed = true;
+        
+        // Record arrival time for reporting
+        plane.ArrivalTime = Time.time;
+        planeArrivalTimes[plane] = Time.time;
 
         Debug.Log($"Handling arrival of plane {plane.PlaneID} at time {Clock}");
         
@@ -193,105 +241,99 @@ public class AirportSimulation : MonoBehaviour
         
         // Start landing sequence
         StartCoroutine(ExecuteLandingSequence(plane, visual, serverIndex));
+        ServerStatus[serverIndex] = 2;
         
         // Move to next plane for next arrival
         CurrentPlaneIndex++;
-        
-        // Check if there are more planes to process
-        if (CurrentPlaneIndex < allPlanes.Count)
-        {
-            Debug.Log("Waiting for next available slot to land next plane");
-        }
-        else
-        {
-            Debug.Log("No more planes to arrive");
-        }
     }
 
     private IEnumerator ExecuteLandingSequence(Plane plane, PlaneVisual visual, int serverIndex)
     {
-        // Approach
-        visual.MoveBetweenWaypoints(Waypoints[0], Waypoints[1], PlaneFlyHeight, PlaneFlyHeight, PlaneFlySpeed, PlaneFlySpeed);
-        yield return new WaitForSeconds(1.5f);
+        if (ServerPositions == null || ServerPositions.Length == 0)
+        {
+            Debug.LogError("No server positions available");
+            yield break;
+        }
         
-        // Descend
-        visual.MoveBetweenWaypoints(Waypoints[1], Waypoints[2], PlaneFlyHeight, PlaneLandingHeight, PlaneFlySpeed, PlaneLandingSpeed);
-        yield return new WaitForSeconds(1.5f);
+        if (serverIndex < 0 || serverIndex >= ServerPositions.Length)
+        {
+            Debug.LogError($"Invalid server index: {serverIndex}");
+            yield break;
+        }
         
-        // Land
-        visual.MoveBetweenWaypoints(Waypoints[2], Waypoints[3], PlaneLandingHeight, PlaneLandingHeight, PlaneLandingSpeed, PlaneTaxiSpeed);
-        yield return new WaitForSeconds(2f);
+        // Calculate positions relative to the runway
+        Vector3 runwayStart = new Vector3(0, 0, 100f);  // Start of runway
+        Vector3 runwayEnd = new Vector3(0, 0, 0);       // End of runway
         
-        // Move to server position
+        // Teleport to approach position (above runway start)
+        visual.Teleport(runwayStart, PlaneFlyHeight);
+        yield return new WaitForSeconds(0.1f);
+        
+        // Teleport to landing position (above runway end)
+        visual.Teleport(runwayEnd, PlaneLandingHeight);
+        yield return new WaitForSeconds(0.1f);
+        
+        // Teleport to server position
         Vector3 serverPosition = ServerPositions[serverIndex];
-        visual.MoveTo(serverPosition, PlaneLandingHeight, PlaneTaxiSpeed);
+        visual.Teleport(serverPosition, PlaneLandingHeight);
         
-        // Mark server as in service
+        // Update server status
         ServerStatus[serverIndex] = 2;
-        
-        // Clear arrival runway
         IsArrivalClear = true;
         
-        Debug.Log($"Plane {plane.PlaneID} has arrived at server {serverIndex}");
-        
-        // Check if we can land another plane now that the runway is clear
-        CheckAndHandleNextArrival();
+        Debug.Log($"Plane {plane.PlaneID} has landed at server {serverIndex}");
         
         // Start service and schedule departure
-        StartCoroutine(ExecuteServiceAndDeparture(plane, visual, serverIndex));
+        StartCoroutine(ExecuteTeleportServiceAndDeparture(plane, visual, serverIndex));
     }
 
-    private IEnumerator ExecuteServiceAndDeparture(Plane plane, PlaneVisual visual, int serverIndex)
+    private IEnumerator ExecuteTeleportServiceAndDeparture(Plane plane, PlaneVisual visual, int serverIndex)
     {
-        // Service the plane (wait for service time)
+        float serviceStartTime = Time.time;
+        planeServiceStartTimes[plane] = serviceStartTime;
+        
         float serviceTime = plane.ServiceTime;
         Debug.Log($"Servicing plane {plane.PlaneID} for {serviceTime} seconds at server {serverIndex}");
-        yield return new WaitForSeconds(serviceTime);
         
-        // Handle departure
-        yield return StartCoroutine(ExecuteDepartureSequence(plane, visual, serverIndex));
+        yield return new WaitForSeconds(serviceTime);
+        yield return StartCoroutine(ExecuteTeleportDepartureSequence(plane, visual, serverIndex));
     }
 
-    private IEnumerator ExecuteDepartureSequence(Plane plane, PlaneVisual visual, int serverIndex)
+    private IEnumerator ExecuteTeleportDepartureSequence(Plane plane, PlaneVisual visual, int serverIndex)
     {
-        // Wait for departure way to be clear
         while (!IsDepartureWayClear())
         {
             yield return new WaitForSeconds(0.5f);
         }
         
-        // Mark departure way as busy
         IsDepartureClear = false;
         
-        // Taxi to departure position
-        visual.MoveTo(Waypoints[3], PlaneLandingHeight, PlaneTaxiSpeed);
-        yield return new WaitForSeconds(1f);
+        // Calculate runway positions for departure
+        Vector3 runwayStart = new Vector3(0, 0, 0);     // Start of runway
+        Vector3 runwayEnd = new Vector3(0, 0, -100f);    // End of runway
         
-        // Take off
-        visual.MoveBetweenWaypoints(Waypoints[3], Waypoints[4], PlaneLandingHeight, PlaneFlyHeight, PlaneTaxiSpeed, PlaneFlySpeed);
+        // Teleport to runway start
+        visual.Teleport(runwayStart, PlaneLandingHeight);
+        yield return new WaitForSeconds(0.1f);
         
-        // Clear the server
+        // Take off from runway
+        visual.Teleport(runwayEnd, PlaneFlyHeight);
+        
+        // Update server status
         ServerStatus[serverIndex] = 0;
-        
-        // Mark departure way as clear
-        IsDepartureClear = true;
-        
         Debug.Log($"Plane {plane.PlaneID} has departed from server {serverIndex}");
         
-        // Remove the plane visual after it's out of sight
-        yield return new WaitForSeconds(2f);
-        if (visual != null && visual.gameObject != null)
-        {
-            Destroy(visual.gameObject);
-        }
+        // Record service completion
+        float serviceEndTime = Time.time;
+        simulationReport.RecordPlaneServed(plane, planeServiceStartTimes[plane], serviceEndTime);
+        simulationReport.RecordServerUsage(serverIndex, serviceEndTime - planeServiceStartTimes[plane]);
         
-        // Remove from tracking
+        // Clean up
+        planeArrivalTimes.Remove(plane);
+        planeServiceStartTimes.Remove(plane);
         PlaneVisuals.Remove(plane);
         
-        // Check if we can land another plane now that a server is free
-        CheckAndHandleNextArrival();
-        
-        // Check if simulation is complete
+        CheckNextArrival();
         CheckSimulationCompletion();
     }
 
@@ -315,18 +357,6 @@ public class AirportSimulation : MonoBehaviour
         return IsDepartureClear;
     }
 
-    private void StartService(Plane plane, int serverIndex)
-    {
-        ServerStatus[serverIndex] = 2;
-        Debug.Log($"Plane {plane.PlaneID} assigned to server {serverIndex}.");
-    }
-
-    private void HandleDeparture()
-    {
-        Debug.Log("Departure logic not implemented yet.");
-    }
-
-    // Checks if all planes have completed their arrivals and ends the simulation, then calls for the report
     private void CheckSimulationCompletion()
     {
         if (CurrentPlaneIndex >= planesManager.GetPlaneCount() && PlaneVisuals.Count == 0)
@@ -344,15 +374,23 @@ public class AirportSimulation : MonoBehaviour
             if (allServersIdle)
             {
                 Debug.Log("Simulation complete: All planes have been processed and all servers are idle. Generating report...");
-                Report();
+                GenerateReport();
             }
         }
     }
-        
-    public void Report()
+
+    // Checks if all planes have completed their arrivals and ends the simulation, then calls for the report
+    private void GenerateReport()
     {
-        Debug.Log("Simulation report generated.");
-        // Add logic to generate and print the simulation report
+        if (simulationReport != null)
+        {
+            simulationReport.FinalizeReport();
+            simulationReport.LogReport();
+        }
+        else
+        {
+            Debug.LogError("Simulation report is not initialized!");
+        }
     }
 
 }
