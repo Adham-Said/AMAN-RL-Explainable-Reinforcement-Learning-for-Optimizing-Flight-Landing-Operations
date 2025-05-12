@@ -10,24 +10,16 @@ from sb3_contrib.common.maskable.callbacks import  MaskableEvalCallback
 from stable_baselines3.common.callbacks import StopTrainingOnNoModelImprovement, StopTrainingOnRewardThreshold, BaseCallback
 
 
-
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import shap
-
 
 import os
-import gymnasium as gym
-import numpy as np
-import matplotlib.pyplot as plt
 import pysindy as ps
-
 from airplane_boarding import AirplaneEnv
 from sb3_contrib import MaskablePPO
-from sb3_contrib.common.maskable.utils import get_action_masks
-from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
+
+
 from stable_baselines3.common.env_util import make_vec_env
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from stable_baselines3.common.callbacks import BaseCallback
