@@ -10,8 +10,8 @@ public class AirportSimulation : MonoBehaviour
     // Constants for visualization
     public const float PlaneFlyHeight = 200f;
     public const float PlaneLandingHeight = 4f;
-    public const float PlaneFlySpeed = 60f;
-    public const float PlaneLandingSpeed = 50f;
+    public const float PlaneFlySpeed = 100f;
+    public const float PlaneLandingSpeed = 80f;
     public const float PlaneTaxiSpeed = 50f;
     public const float PlaneSize = 1f;
     public const float PlaneSpeed = 9f;
@@ -161,19 +161,11 @@ public class AirportSimulation : MonoBehaviour
 
     private PlaneVisual CreatePlaneVisual(Plane plane)
     {
-        // Find the Spawn point
-        GameObject spawnPoint = GameObject.Find("Spawn");
-        if (spawnPoint == null)
-        {
-            Debug.LogError("Could not find 'Spawn' GameObject in the scene!");
-            return null;
-        }
-
         // Create the plane at the spawn point
-        GameObject planeObj = Instantiate(AirlinerPrefab, spawnPoint.transform.position, Quaternion.identity);
+        GameObject planeObj = Instantiate(AirlinerPrefab, Waypoints[0], Quaternion.identity);
         PlaneVisual visual = planeObj.AddComponent<PlaneVisual>();
         planeObj.name = $"Plane {plane.PlaneID}";
-        Debug.Log($"Created plane {planeObj.name} at spawn point");
+        Debug.Log($"Created plane {planeObj.name} at {Waypoints[0]}");
         return visual;
     }
 
@@ -340,14 +332,13 @@ public class AirportSimulation : MonoBehaviour
         
         // Start landing sequence
         StartCoroutine(ExecuteLandingSequence(plane, visual, serverIndex));
-        ServerStatus[serverIndex] = 2;
+        ServerStatus[serverIndex] = 1;
         
         // Move to next plane for next arrival
         CurrentPlaneIndex++;
     }
 
-    private IEnumerator ExecuteLandingSequence(Plane plane, PlaneVisual visual = null, int serverIndex = -1)
-    {
+    private IEnumerator ExecuteLandingSequence(Plane plane, PlaneVisual visual = null, int serverIndex = -1){
         // If serverIndex not provided, find an available one
         if (serverIndex == -1)
         {
@@ -387,52 +378,68 @@ public class AirportSimulation : MonoBehaviour
             PlaneVisuals[plane] = visual;
         }
         
-        // Find the Spawn point
-        GameObject spawnPoint = GameObject.Find("Spawn");
-        if (spawnPoint == null)
-        {
-            Debug.LogError("Could not find 'Spawn' GameObject in the scene!");
-            ServerStatus[serverIndex] = 0; // Free the server
-            yield break;
-        }
+        // move to waypoint 0
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[0], Waypoints[1], PlaneFlySpeed));
         
-        // Find the Arrival point
-        GameObject arrivalPoint = GameObject.Find("Arrival 1");
-        if (arrivalPoint == null)
-        {
-            Debug.LogError("Could not find 'Arrival 1' GameObject in the scene!");
-            ServerStatus[serverIndex] = 0; // Free the server
-            yield break;
-        }
-        
-        // Ensure plane is at Spawn point first
-        visual.Teleport(spawnPoint.transform.position, PlaneFlyHeight);
-        yield return new WaitForSeconds(0.5f);
-        
-        // Then move to arrival point (runway)
-        visual.Teleport(arrivalPoint.transform.position, PlaneFlyHeight);
+        // move to waypoint 1 (Approach)
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[1], Waypoints[2], PlaneFlySpeed));
 
-        yield return new WaitForSeconds(0.1f);
+        // move to waypoint 2 (Runway)
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[2], Waypoints[3], PlaneLandingSpeed));
         
-        // Teleport to server position
+        // Taxi to server position
         Vector3 serverPosition = ServerPositions[serverIndex];
-        visual.Teleport(serverPosition, PlaneLandingHeight);
-        
-        // Update server status
-        ServerStatus[serverIndex] = 2;
-        IsArrivalClear = true;
-        
+        if(serverIndex<5){
+            StartCoroutine(ExecuteTaxiFrom0to4ServersIn(plane, visual, serverIndex));
+        }else{
+            StartCoroutine(ExecuteTaxiFrom5to9ServersIn(plane, visual, serverIndex));
+        }
+
         Debug.Log($"Plane {plane.PlaneID} has landed at server {serverIndex}");
 
-        CheckNextArrival();
+        IsArrivalClear = true;
+        ServerStatus[serverIndex] = 2;
+        
         CheckSimulationCompletion();
-
-        // Start service and schedule departure
-        StartCoroutine(ExecuteTeleportServiceAndDeparture(plane, visual, serverIndex));
     }
 
-    private IEnumerator ExecuteTeleportServiceAndDeparture(Plane plane, PlaneVisual visual, int serverIndex)
-    {
+    private IEnumerator ExecuteTaxiFrom0to4ServersIn(Plane plane, PlaneVisual visual, int serverIndex){
+        
+        // take first turn
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[3], Waypoints[4], PlaneTaxiSpeed));
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[4], Waypoints[5], PlaneTaxiSpeed));
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[5], Waypoints[6], PlaneTaxiSpeed));
+
+        switch (serverIndex)
+        {
+            case 0:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[6], Waypoints[7], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[7], Waypoints[8], PlaneTaxiSpeed));
+                break;
+            case 1:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[6], Waypoints[9], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[9], Waypoints[10], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[10], Waypoints[11], PlaneTaxiSpeed));
+                break;
+            case 2:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[6], Waypoints[12], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[12], Waypoints[13], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[13], Waypoints[14], PlaneTaxiSpeed));
+                break;
+            case 3:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[6], Waypoints[15], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[15], Waypoints[16], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[16], Waypoints[17], PlaneTaxiSpeed));
+                break;
+            case 4:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[6], Waypoints[18], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[18], Waypoints[19], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[19], Waypoints[20], PlaneTaxiSpeed));
+                break;
+            default:
+                break;
+        }
+
         float serviceStartTime = Time.time;
         planeServiceStartTimes[plane] = serviceStartTime;
         
@@ -440,47 +447,63 @@ public class AirportSimulation : MonoBehaviour
         Debug.Log($"Servicing plane {plane.PlaneID} for {serviceTime} seconds at server {serverIndex}");
         
         yield return new WaitForSeconds(serviceTime);
-        yield return StartCoroutine(ExecuteTeleportDepartureSequence(plane, visual, serverIndex));
-    }
-
-    private IEnumerator ExecuteTeleportDepartureSequence(Plane plane, PlaneVisual visual, int serverIndex)
-    {
         while (!IsDepartureWayClear())
         {
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(1f);
         }
         
+        // Start taxi out sequence after service is complete and way is clear
+        StartCoroutine(ExecuteTaxiFrom0to4ServersOut(plane, visual, serverIndex));
+    }
+
+    private IEnumerator ExecuteTaxiFrom0to4ServersOut(Plane plane, PlaneVisual visual, int serverIndex){
         IsDepartureClear = false;
-        
-        // Find the Departure 1 GameObject in the scene
-        GameObject departurePoint = GameObject.Find("Departure 1");
-        if (departurePoint == null)
-        {
-            Debug.LogError("Could not find 'Departure 1' GameObject in the scene!");
-            yield break;
-        }
-        
-        // Find the Despawn point
-        GameObject despawnPoint = GameObject.Find("Despawn");
-        if (despawnPoint == null)
-        {
-            Debug.LogError("Could not find 'Despawn' GameObject in the scene!");
-            yield break;
-        }
-        
-        // Teleport to departure point
-        visual.Teleport(departurePoint.transform.position, PlaneLandingHeight);
-        yield return new WaitForSeconds(0.1f);
-        
-        // Take off from runway (move to end of runway and gain altitude)
-        visual.Teleport(departurePoint.transform.position, PlaneFlyHeight);
-        yield return new WaitForSeconds(0.1f);
-        
-        // Teleport to despawn point
-        visual.Teleport(despawnPoint.transform.position, PlaneFlyHeight);
-        
-        // Update server status
         ServerStatus[serverIndex] = 0;
+        
+        // Trigger new arrival check as soon as we start leaving the server
+        CheckNextArrival();
+
+        switch (serverIndex)
+        {
+            case 0:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[8], Waypoints[7], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[7], Waypoints[6], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[6], Waypoints[21], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            case 1:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[11], Waypoints[10], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[10], Waypoints[9], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[9], Waypoints[21], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[21], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            case 2:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[14], Waypoints[13], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[13], Waypoints[12], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[12], Waypoints[21], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[21], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            case 3:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[17], Waypoints[16], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[16], Waypoints[15], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[15], Waypoints[21], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[21], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            case 4:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[20], Waypoints[19], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[19], Waypoints[18], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[18], Waypoints[21], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[21], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            default:
+                break;
+        }
+
+        // Update server status
         IsDepartureClear = true;
         Debug.Log($"Plane {plane.PlaneID} has departed from server {serverIndex}");
         
@@ -488,7 +511,169 @@ public class AirportSimulation : MonoBehaviour
         float serviceEndTime = Time.time;
         simulationReport.RecordPlaneServed(plane, planeServiceStartTimes[plane], serviceEndTime);
         simulationReport.RecordServerUsage(serverIndex, serviceEndTime - planeServiceStartTimes[plane]);
+
+        // Start departure sequence and wait for it to complete
+        yield return StartCoroutine(ExecuteDepartureSequence(plane, visual, serverIndex));
+
+        // Clean up after departure sequence is complete
+        planeArrivalTimes.Remove(plane);
+        planeServiceStartTimes.Remove(plane);
+        PlaneVisuals.Remove(plane);
         
+        // Destroy the visual after a short delay
+        if (visual != null && visual.gameObject != null)
+        {
+            Destroy(visual.gameObject);
+        }
+        
+        CheckSimulationCompletion();
+    }
+
+    private IEnumerator ExecuteTaxiFrom5to9ServersIn(Plane plane, PlaneVisual visual, int serverIndex){
+        // take Second turn
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[3], Waypoints[22], PlaneTaxiSpeed));
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[22], Waypoints[23], PlaneTaxiSpeed));
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[23], Waypoints[24], PlaneTaxiSpeed));
+
+        switch (serverIndex)
+        {
+            case 5:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[24], Waypoints[25], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[25], Waypoints[26], PlaneTaxiSpeed));
+                break;
+            case 6:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[24], Waypoints[27], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[27], Waypoints[28], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[28], Waypoints[29], PlaneTaxiSpeed));
+                break;
+            case 7:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[24], Waypoints[30], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[30], Waypoints[31], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[31], Waypoints[32], PlaneTaxiSpeed));
+                break;
+            case 8:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[24], Waypoints[33], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[33], Waypoints[34], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[34], Waypoints[35], PlaneTaxiSpeed));
+                break;
+            case 9:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[24], Waypoints[36], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[36], Waypoints[37], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[37], Waypoints[38], PlaneTaxiSpeed));
+                break;
+            default:
+                break;
+        }
+
+        float serviceStartTime = Time.time;
+        planeServiceStartTimes[plane] = serviceStartTime;
+        
+        float serviceTime = plane.ServiceTime;
+        Debug.Log($"Servicing plane {plane.PlaneID} for {serviceTime} seconds at server {serverIndex}");
+        
+        yield return new WaitForSeconds(serviceTime);
+        while (!IsDepartureWayClear())
+        {
+            yield return new WaitForSeconds(1f);
+        }
+        
+        // Start taxi out sequence after service is complete and way is clear
+        StartCoroutine(ExecuteTaxiFrom5to9ServersOut(plane, visual, serverIndex));
+    }
+
+    private IEnumerator ExecuteTaxiFrom5to9ServersOut(Plane plane, PlaneVisual visual, int serverIndex){
+        IsDepartureClear = false;
+        ServerStatus[serverIndex] = 0;
+        
+        // Trigger new arrival check as soon as we start leaving the server
+        CheckNextArrival();
+
+        switch (serverIndex)
+        {
+            case 5:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[26], Waypoints[25], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[25], Waypoints[24], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[24], Waypoints[39], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[39], Waypoints[40], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[40], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            case 6:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[29], Waypoints[28], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[28], Waypoints[27], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[27], Waypoints[39], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[39], Waypoints[40], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[40], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            case 7:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[32], Waypoints[31], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[31], Waypoints[30], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[30], Waypoints[39], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[39], Waypoints[40], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[40], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            case 8:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[35], Waypoints[34], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[34], Waypoints[33], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[33], Waypoints[39], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[39], Waypoints[40], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[40], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            case 9:
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[38], Waypoints[37], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[37], Waypoints[36], PlaneTaxiSpeed, true));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[36], Waypoints[39], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[39], Waypoints[40], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[40], Waypoints[41], PlaneTaxiSpeed));
+                yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[41], Waypoints[42], PlaneTaxiSpeed));
+                break;
+            default:
+                break;
+        }
+
+        // Update server status
+        IsDepartureClear = true;
+        Debug.Log($"Plane {plane.PlaneID} has departed from server {serverIndex}");
+        
+        // Record service completion
+        float serviceEndTime = Time.time;
+        simulationReport.RecordPlaneServed(plane, planeServiceStartTimes[plane], serviceEndTime);
+        simulationReport.RecordServerUsage(serverIndex, serviceEndTime - planeServiceStartTimes[plane]);
+
+        // Start departure sequence and wait for it to complete
+        yield return StartCoroutine(ExecuteDepartureSequence(plane, visual, serverIndex));
+
+        // Clean up after departure sequence is complete
+        planeArrivalTimes.Remove(plane);
+        planeServiceStartTimes.Remove(plane);
+        PlaneVisuals.Remove(plane);
+        
+        // Destroy the visual after a short delay
+        if (visual != null && visual.gameObject != null)
+        {
+            Destroy(visual.gameObject);
+        }
+        
+        CheckSimulationCompletion();
+    }
+
+    private IEnumerator ExecuteDepartureSequence(Plane plane, PlaneVisual visual, int serverIndex){
+        // move to waypoint 0
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[42], Waypoints[43], PlaneTaxiSpeed));
+        
+        // move to waypoint 1 (Approach)
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[43], Waypoints[44], PlaneLandingSpeed));
+
+        // move to waypoint 2 (Runway)
+        yield return StartCoroutine(visual.MoveToWaypoint(Waypoints[44], Waypoints[45], PlaneFlySpeed));
+
+        IsDepartureClear = true;
+        
+        Debug.Log($"Plane {plane.PlaneID} has departed from server {serverIndex}");
+
         // Clean up
         planeArrivalTimes.Remove(plane);
         planeServiceStartTimes.Remove(plane);
@@ -499,7 +684,7 @@ public class AirportSimulation : MonoBehaviour
         {
             Destroy(visual.gameObject);
         }
-        
+
         CheckNextArrival();
         CheckSimulationCompletion();
     }

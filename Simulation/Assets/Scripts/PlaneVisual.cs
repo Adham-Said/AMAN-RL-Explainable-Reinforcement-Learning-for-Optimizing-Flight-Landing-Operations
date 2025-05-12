@@ -161,4 +161,73 @@ public class PlaneVisual : MonoBehaviour
         yield return new WaitForSeconds(2f);
         transform.position = new Vector3(position.x, height, position.z);
     }
+    
+    /// <summary>
+    /// Moves the plane from start waypoint to end waypoint at a constant speed with proper orientation
+    /// </summary>
+    /// <param name="start">Starting position (X, Y, Z coordinates)</param>
+    /// <param name="end">Target position (X, Y, Z coordinates)</param>
+    /// <param name="speed">Movement speed in units per second</param>
+    /// <returns>IEnumerator for coroutine</returns>
+    public IEnumerator MoveToWaypoint(Vector3 start, Vector3 end, float speed, bool backwards = false)
+    {
+        // Set initial position at start point
+        transform.position = start;
+        
+        // Calculate direction to the end point
+        Vector3 direction = (end - start).normalized;
+        
+        // Only rotate if we have a valid direction (not zero length)
+        if (direction != Vector3.zero)
+        {
+            // Calculate the target rotation to face the end point
+            Quaternion targetRotation = Quaternion.LookRotation(-direction);
+            
+            // Apply the rotation immediately
+            transform.rotation = targetRotation;
+            
+            // Optional: Smooth rotation (uncomment if you want smooth rotation)
+            // float rotationSpeed = 2f;
+            // while (Quaternion.Angle(transform.rotation, targetRotation) > 0.1f)
+            // {
+            //     transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            //     yield return null;
+            // }
+        }
+        
+        // Calculate the distance to move
+        float distance = Vector3.Distance(start, end);
+        float duration = distance / speed;
+        float elapsedTime = 0f;
+        
+        // Move the plane smoothly between positions
+        while (elapsedTime < duration)
+        {
+            // Calculate the interpolation factor (0 to 1)
+            float t = elapsedTime / duration;
+            
+            // Move the plane from start to end
+            transform.position = Vector3.Lerp(start, end, t);
+            
+            // If moving backwards, rotate 180 degrees to show reverse orientation
+            if (backwards && direction != Vector3.zero)
+            {
+                transform.rotation = Quaternion.LookRotation(direction);
+            }
+            
+            // Update the elapsed time
+            elapsedTime += Time.deltaTime;
+            
+            yield return null;
+        }
+        
+        // Ensure we reach exactly the end position
+        transform.position = end;
+        
+        // Reset rotation after movement if needed
+        if (backwards && direction != Vector3.zero)
+        {
+            transform.rotation = Quaternion.LookRotation(direction);
+        }
+    }
 }
