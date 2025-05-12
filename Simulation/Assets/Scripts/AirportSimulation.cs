@@ -18,14 +18,9 @@ public class AirportSimulation : MonoBehaviour
     public const float ArrivalPathLength = 45f;
     public const float PlaneHeight = 0.5f;
 
-    public enum SimulationMode
-    {
-        Basic,
-        AgentBased
-    }
-
     [Header("Simulation Parameters")]
-    [SerializeField] private SimulationMode simulationMode = SimulationMode.Basic;
+    [Tooltip("When checked, uses basic simulation mode. When unchecked, uses agent-based mode.")]
+    [SerializeField] private bool useBasicMode = true;
     [SerializeField] public int NumberOfWaypoints = 10;
     [SerializeField] public int NumberOfServers = 10;
     [SerializeField] private float MeanServiceTime = 5f;
@@ -33,6 +28,12 @@ public class AirportSimulation : MonoBehaviour
 
     [Header("Visualization")]
     [SerializeField] private GameObject AirlinerPrefab;
+
+    [Header("Agent Settings")]
+    [SerializeField] private bool useAgentMode = true;
+    private AgentController agentController;
+    private List<Plane> pendingPlanes = new List<Plane>();
+    private bool isProcessingLanding = false;
 
     [Header("Simulation State")]
     public bool IsInitialized = false;
@@ -71,6 +72,14 @@ public class AirportSimulation : MonoBehaviour
         InitializeServerPositions();
     }
 
+    private void OnDestroy()
+    {
+        if (agentController != null)
+        {
+            agentController.OnDecisionMade -= HandleAgentDecision;
+        }
+    }
+
     private void Start()
     {
         simulationReport = new Report(NumberOfServers);
@@ -90,8 +99,18 @@ public class AirportSimulation : MonoBehaviour
             return;
         }
 
-        Debug.Log("Starting simulation setup...");
-        StartSimulation();
+        Debug.Log($"Starting simulation in {(useBasicMode ? "Basic" : "Agent-Based")} mode...");
+        
+        if (useBasicMode)
+        {
+            StartSimulation();
+        }
+        else
+        {
+            agentController = gameObject.AddComponent<AgentController>();
+            agentController.OnDecisionMade += HandleAgentDecision;
+            StartSimulation();
+        }
     }
 
     public void SetParameters(int totalArrivals, float meanServiceTime)
@@ -175,17 +194,71 @@ public class AirportSimulation : MonoBehaviour
         }
     }
 
+    private void HandleAgentDecision(int planeIndex)
+    {
+        if (planeIndex >= 0 && planeIndex < pendingPlanes.Count)
+        {
+            Plane selectedPlane = pendingPlanes[planeIndex];
+            if (!selectedPlane.IsProcessed)
+            {
+                pendingPlanes.RemoveAt(planeIndex);
+                StartCoroutine(ExecuteLandingSequence(selectedPlane));
+            }
+        }
+        isProcessingLanding = false;
+        
+        // Process next plane if any
+        if (useAgentMode && pendingPlanes.Count > 0)
+        {
+            ProcessNextPlaneWithAgent();
+        }
+    }
+
+    private void ProcessNextPlaneWithAgent()
+    {
+        if (isProcessingLanding || pendingPlanes.Count == 0) return;
+        
+        isProcessingLanding = true;
+        agentController.RequestDecision(pendingPlanes.ToArray());
+    }
+
     private void CheckNextArrival()
     {
         Debug.Log($"Checking next arrival. CurrentPlaneIndex={CurrentPlaneIndex}, planesManager.GetPlaneCount()={planesManager.GetPlaneCount()}, IsArrivalClear={IsArrivalClear}, FindIdleServer()={FindIdleServer()}");
-        // Only try to handle next arrival if we have planes left and conditions are met
-        if (CurrentPlaneIndex < planesManager.GetPlaneCount() && IsArrivalClear && FindIdleServer() != -1)
+        
+        if (CurrentPlaneIndex >= planesManager.GetPlaneCount())
         {
-            HandleArrival();
+            Debug.Log("All planes have arrived");
+            return;
+        }
+
+        // Get the next plane
+        var allPlanes = planesManager.GetAllPlanes();
+        Plane plane = allPlanes[CurrentPlaneIndex];
+        
+        if (useAgentMode)
+        {
+            // In agent mode, add to pending planes and let agent decide
+            pendingPlanes.Add(plane);
+            plane.IsProcessed = true;
+            plane.ArrivalTime = Time.time;
+            planeArrivalTimes[plane] = Time.time;
+            CurrentPlaneIndex++;
+            
+            // Process the plane with agent
+            ProcessNextPlaneWithAgent();
         }
         else
         {
-            Debug.Log("Conditions not met for next arrival. Waiting...");
+            // In basic mode, handle immediately if conditions are met
+            if (IsArrivalClear && FindIdleServer() != -1)
+            {
+                HandleArrival();
+            }
+            else
+            {
+                Debug.Log("Conditions not met for next arrival. Waiting...");
+            }
         }
     }
 
@@ -209,7 +282,7 @@ public class AirportSimulation : MonoBehaviour
         Plane plane = null;
         var allPlanes = planesManager.GetAllPlanes();
         
-        if (simulationMode == SimulationMode.Basic)
+        if (useBasicMode)
         {
             Debug.Log("Searching for next important plane to land");
             // In Basic mode, prioritize high-priority planes first
@@ -273,8 +346,19 @@ public class AirportSimulation : MonoBehaviour
         CurrentPlaneIndex++;
     }
 
-    private IEnumerator ExecuteLandingSequence(Plane plane, PlaneVisual visual, int serverIndex)
+    private IEnumerator ExecuteLandingSequence(Plane plane, PlaneVisual visual = null, int serverIndex = -1)
     {
+        // If serverIndex not provided, find an available one
+        if (serverIndex == -1)
+        {
+            serverIndex = FindIdleServer();
+            if (serverIndex == -1)
+            {
+                Debug.LogError("No available servers for landing sequence");
+                yield break;
+            }
+        }
+        
         if (ServerPositions == null || ServerPositions.Length == 0)
         {
             Debug.LogError("No server positions available");
@@ -287,11 +371,28 @@ public class AirportSimulation : MonoBehaviour
             yield break;
         }
         
+        // Mark the server as booked
+        ServerStatus[serverIndex] = 1;
+        plane.ServerIndex = serverIndex;
+        
+        // Create visual if not provided
+        if (visual == null)
+        {
+            visual = CreatePlaneVisual(plane);
+            if (visual == null) 
+            {
+                ServerStatus[serverIndex] = 0; // Free the server
+                yield break;
+            }
+            PlaneVisuals[plane] = visual;
+        }
+        
         // Find the Spawn point
         GameObject spawnPoint = GameObject.Find("Spawn");
         if (spawnPoint == null)
         {
             Debug.LogError("Could not find 'Spawn' GameObject in the scene!");
+            ServerStatus[serverIndex] = 0; // Free the server
             yield break;
         }
         
@@ -300,6 +401,7 @@ public class AirportSimulation : MonoBehaviour
         if (arrivalPoint == null)
         {
             Debug.LogError("Could not find 'Arrival 1' GameObject in the scene!");
+            ServerStatus[serverIndex] = 0; // Free the server
             yield break;
         }
         
