@@ -9,14 +9,14 @@ public class AirportSimulation : MonoBehaviour
 
     // Constants for visualization
     public const float PlaneFlyHeight = 200f;
-    public const float PlaneLandingHeight = 4f;
+    public const float PlaneLandingHeight = 5f;
     public const float PlaneFlySpeed = 100f;
     public const float PlaneLandingSpeed = 80f;
     public const float PlaneTaxiSpeed = 50f;
-    public const float PlaneSize = 1f;
+    public const float PlaneSize = 2f;
     public const float PlaneSpeed = 9f;
     public const float ArrivalPathLength = 45f;
-    public const float PlaneHeight = 0.5f;
+    public const float PlaneHeight = 1f;
 
     [Header("Simulation Parameters")]
     [Tooltip("When checked, uses basic simulation mode. When unchecked, uses agent-based mode.")]
@@ -87,7 +87,7 @@ public class AirportSimulation : MonoBehaviour
         planesManager = new Planes();
         planesManager.InitializePlanes(
             numPlanes: TotalPlanes,
-            highPriorityPercentage: 10f,
+            highPriorityPercentage: 20f,
             meanServiceTime: MeanServiceTime
         );
 
@@ -165,7 +165,11 @@ public class AirportSimulation : MonoBehaviour
         GameObject planeObj = Instantiate(AirlinerPrefab, Waypoints[0], Quaternion.identity);
         PlaneVisual visual = planeObj.AddComponent<PlaneVisual>();
         planeObj.name = $"Plane {plane.PlaneID}";
-        Debug.Log($"Created plane {planeObj.name} at {Waypoints[0]}");
+
+        // Set the scale of the plane object to PlaneSize
+        planeObj.transform.localScale = Vector3.one * PlaneSize;
+
+        Debug.Log($"Created plane {planeObj.name} at {Waypoints[0]} with scale {PlaneSize}");
         return visual;
     }
 
@@ -323,6 +327,19 @@ public class AirportSimulation : MonoBehaviour
         // Create visual representation at arrival position
         PlaneVisual visual = CreatePlaneVisual(plane);
         PlaneVisuals[plane] = visual;
+
+            // Apply reddish shade if plane is high priority
+            if (plane.HighPriority == 1)
+            {
+                if (visual != null)
+                {
+                    visual.AddShade(1f, 0f, 0f, 0.5f);
+                }
+                else
+                {
+                    Debug.LogWarning($"PlaneVisual is null for plane {plane.PlaneID}, cannot apply red shade.");
+                }
+            }
         
         // Mark arrival runway as busy and server as busy
         IsArrivalClear = false;

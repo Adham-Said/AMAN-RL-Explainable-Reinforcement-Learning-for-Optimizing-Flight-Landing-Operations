@@ -13,6 +13,50 @@ public class PlaneVisual : MonoBehaviour
         InitializeCollider();
     }
 
+    /// <summary>
+    /// Adds a color shade to the plane with specified RGBA values
+    /// </summary>
+    public void AddShade(float r, float g, float b, float a)
+    {
+        Renderer[] renderers = GetComponentsInChildren<Renderer>();
+        if (renderers != null && renderers.Length > 0)
+        {
+            Color shadeColor = new Color(r, g, b, a);
+
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer.material != null)
+                {
+                    // Create a new material instance to avoid modifying shared material
+                    Material newMat = new Material(renderer.material);
+                    newMat.color = shadeColor;
+
+                    // Set material rendering mode to Transparent to support alpha
+                    newMat.SetFloat("_Mode", 3); // 3 = Transparent mode in standard shader
+                    newMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    newMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    newMat.SetInt("_ZWrite", 0);
+                    newMat.DisableKeyword("_ALPHATEST_ON");
+                    newMat.EnableKeyword("_ALPHABLEND_ON");
+                    newMat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    newMat.renderQueue = 3000;
+
+                    renderer.material = newMat;
+                }
+                else
+                {
+                    Debug.LogWarning("Renderer material is null on PlaneVisual child.");
+                }
+            }   
+            Debug.Log("AddShade applied with specified color to all child renderers.");
+        }
+        else
+        {
+            Debug.LogWarning("No Renderer components found on PlaneVisual or its children.");
+        }
+    }
+
+
     private void InitializePhysics()
     {
         Rigidbody rb = gameObject.AddComponent<Rigidbody>();
