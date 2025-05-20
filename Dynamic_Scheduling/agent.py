@@ -6,29 +6,127 @@ from sb3_contrib.common.maskable.utils import get_action_masks
 
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 from stable_baselines3.common.env_util import make_vec_env
-from sb3_contrib.common.maskable.callbacks import  MaskableEvalCallback
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from stable_baselines3.common.callbacks import StopTrainingOnNoModelImprovement, StopTrainingOnRewardThreshold, BaseCallback
-
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
 import os
 import pysindy as ps
-from airplane_boarding import AirplaneEnv
-from sb3_contrib import MaskablePPO
-
-
-from stable_baselines3.common.env_util import make_vec_env
-from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
-from stable_baselines3.common.callbacks import BaseCallback
 from gymnasium import spaces
+import pandas as pd
 
 model_dir = "models"
 agent_dir = "agents"
 log_dir = "logs"
+xai_dir = "xai_logs"  # New directory for XAI data
 
+# Create directories if they don't exist
+os.makedirs(xai_dir, exist_ok=True)
+
+class XAICallback(BaseCallback):
+    """
+    Callback for collecting and analyzing feature importance during training.
+    """
+    def __init__(self, eval_env, freq=50000, n_samples=10, verbose=0):
+        super().__init__(verbose)
+        self.eval_env = eval_env
+        self.freq = freq
+        self.n_samples = n_samples
+        self.feature_importance_history = []
+        self.timesteps = []
+        
+    def _on_step(self) -> bool:
+        if self.num_timesteps % self.freq == 0:
+            self.logger.record("xai/timestep", self.num_timesteps)
+            
+            # Get a sample observation
+            obs, _ = self.eval_env.reset(seed=42)
+            action_masks = get_action_masks(self.eval_env)
+            
+            # Create SHAP explainer
+            def model_fn(input_array):
+                input_tensor = torch.tensor(input_array, dtype=torch.float32)
+                with torch.no_grad():
+                    latent_pi, _ = self.model.policy.mlp_extractor(input_tensor)
+                    logits = self.model.policy.action_net(latent_pi)
+                    # Apply action mask
+                    masked_logits = logits.clone()
+                    masked_logits[:, ~np.array(action_masks)] = -1e8
+                    return masked_logits.detach().numpy()
+            
+            # Create background data
+            background = np.array([self.eval_env.observation_space.sample() for _ in range(50)])
+            
+            try:
+                # Use KernelExplainer for more reliable results during training
+                explainer = shap.KernelExplainer(model_fn, background[:10])  # Use fewer samples for speed
+                obs_input = obs.reshape(1, -1)
+                shap_values = explainer.shap_values(obs_input)
+                
+                # Create feature importance summary
+                feature_importance = {}
+                
+                # Create human-readable feature names
+                feature_names = []
+                for i in range(len(obs)):
+                    if i % 2 == 0:
+                        feature_names.append(f"seat_{i//2}")
+                    else:
+                        feature_names.append(f"fuel_level_{i//2}")
+                
+                # Average absolute SHAP values across all actions
+                avg_importance = np.mean([np.abs(sv[0]) for sv in shap_values], axis=0)
+                
+                for i, importance in enumerate(avg_importance):
+                    feature_importance[feature_names[i]] = float(importance)
+                
+                # Save feature importance
+                self.feature_importance_history.append(feature_importance)
+                self.timesteps.append(self.num_timesteps)
+                
+                # Save to CSV
+                df = pd.DataFrame(self.feature_importance_history)
+                df['timestep'] = self.timesteps
+                df.to_csv(f"{xai_dir}/feature_importance_history.csv", index=False)
+                
+                # Create visualization
+                if len(self.timesteps) > 1:
+                    self._plot_feature_importance_over_time()
+                
+                # Log top 5 features to tensorboard
+                top_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:5]
+                for feature, importance in top_features:
+                    self.logger.record(f"xai/importance/{feature}", importance)
+                
+                self.logger.dump(self.num_timesteps)
+                
+            except Exception as e:
+                print(f"Error in XAI analysis: {e}")
+        
+        return True
+    
+    def _plot_feature_importance_over_time(self):
+        """Plot how feature importance changes during training"""
+        df = pd.DataFrame(self.feature_importance_history)
+        df['timestep'] = self.timesteps
+        
+        # Get top 5 features from the latest timestep
+        latest = df.iloc[-1].drop('timestep')
+        top_features = latest.sort_values(ascending=False).head(5).index
+        
+        plt.figure(figsize=(12, 8))
+        for feature in top_features:
+            plt.plot(df['timestep'], df[feature], label=feature)
+        
+        plt.xlabel('Training Timesteps')
+        plt.ylabel('Feature Importance (SHAP value)')
+        plt.title('Feature Importance Evolution During Training')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"{xai_dir}/feature_importance_evolution.png")
+        plt.close()
 
 class PeriodicSaveCallback(BaseCallback):
     def __init__(self, save_freq, save_path, verbose=0):
@@ -46,29 +144,111 @@ class PeriodicSaveCallback(BaseCallback):
         return True
 
 def train():
-
-
-    env = make_vec_env(AirplaneEnv, n_envs=12, env_kwargs={"num_of_rows":4, "seats_per_row":5, "num_of_plane_rows":4}, vec_env_cls=SubprocVecEnv, seed = 42)
-
+    # Create environment
+    env = make_vec_env(AirplaneEnv, n_envs=12, 
+                      env_kwargs={"num_of_rows":4, "seats_per_row":5, "num_of_plane_rows":4}, 
+                      vec_env_cls=SubprocVecEnv, seed=42)
+    
+    # Create a single environment for evaluation and XAI
+    eval_env = gym.make('airplane-boarding-v0', num_of_rows=4, seats_per_row=5, num_of_plane_rows=4)
+    
     # Increase ent_coef to encourage exploration, this resulted in a better solution.
     model = MaskablePPO('MlpPolicy', env, verbose=1, device='cpu', tensorboard_log=log_dir, ent_coef=0.05)
 
-    save_callback = PeriodicSaveCallback(save_freq=100_000, save_path=os.path.join(agent_dir, 'MaskablePPO', 'PPO_33'), verbose=1)
+    # Setup callbacks
+    save_callback = PeriodicSaveCallback(save_freq=100_000, 
+                                        save_path=os.path.join(agent_dir, 'MaskablePPO', 'PPO_33'), 
+                                        verbose=1)
 
     eval_callback = MaskableEvalCallback(
         env,
         eval_freq=10_000,
-        # callback_on_new_best = StopTrainingOnRewardThreshold(reward_threshold=???, verbose=1)
-        # callback_after_eval  = StopTrainingOnNoModelImprovement(max_no_improvement_evals=???, min_evals=???, verbose=1)
         verbose=1,
         best_model_save_path=os.path.join(model_dir, 'MaskablePPO'),
     )
+    
+    # Add XAI callback
+    xai_callback = XAICallback(eval_env=eval_env, freq=50000, verbose=1)
+    
+    # Train with all callbacks
+    model.learn(total_timesteps=int(1e10), 
+               callback=[eval_callback, save_callback, xai_callback])
+    
+    # Final XAI analysis on the fully trained model
+    print("Performing final XAI analysis...")
+    final_xai_analysis(model, eval_env)
+    
+    return model
 
-    """
-    total_timesteps: pass in a very large number to train (almost) indefinitely.
-    callback: pass in reference to a callback fuction above
-    """
-    model.learn(total_timesteps=int(1e10), callback=[eval_callback, save_callback])
+def final_xai_analysis(model, env):
+    """Comprehensive XAI analysis on the final model"""
+    obs, _ = env.reset(seed=42)
+    action_masks = get_action_masks(env)
+    
+    # Get model's action
+    action, _ = model.predict(observation=obs, deterministic=True, action_masks=action_masks)
+    
+    # Create feature names
+    feature_names = []
+    for i in range(len(obs)):
+        if i % 2 == 0:
+            feature_names.append(f"seat_{i//2}")
+        else:
+            feature_names.append(f"fuel_level_{i//2}")
+    
+    # SHAP analysis
+    def model_fn(input_array):
+        input_tensor = torch.tensor(input_array, dtype=torch.float32)
+        with torch.no_grad():
+            latent_pi, _ = model.policy.mlp_extractor(input_tensor)
+            logits = model.policy.action_net(latent_pi)
+            # Apply action mask
+            masked_logits = logits.clone()
+            masked_logits[:, ~np.array(action_masks)] = -1e8
+            return masked_logits.detach().numpy()
+    
+    # Create background data
+    background = np.array([env.observation_space.sample() for _ in range(100)])
+    
+    # Use KernelExplainer for final analysis
+    explainer = shap.KernelExplainer(model_fn, background)
+    obs_input = obs.reshape(1, -1)
+    shap_values = explainer.shap_values(obs_input)
+    
+    # Save SHAP plots for each possible action
+    os.makedirs(f"{xai_dir}/final_analysis", exist_ok=True)
+    
+    # Overall feature importance
+    plt.figure(figsize=(10, 8))
+    avg_shap = np.mean([np.abs(sv) for sv in shap_values], axis=0)
+    feature_importance = dict(zip(feature_names, avg_shap[0]))
+    sorted_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
+    
+    features = [x[0] for x in sorted_features]
+    importances = [x[1] for x in sorted_features]
+    
+    plt.barh(features, importances)
+    plt.xlabel('Mean |SHAP value|')
+    plt.title('Overall Feature Importance')
+    plt.tight_layout()
+    plt.savefig(f"{xai_dir}/final_analysis/overall_importance.png")
+    
+    # Save waterfall plot for the chosen action
+    plt.figure(figsize=(10, 8))
+    shap.plots.waterfall(shap.Explanation(values=shap_values[action][0], 
+                                         base_values=explainer.expected_value[action],
+                                         data=obs_input[0],
+                                         feature_names=feature_names),
+                        show=False)
+    plt.tight_layout()
+    plt.savefig(f"{xai_dir}/final_analysis/waterfall_plot.png")
+    
+    # Save summary data
+    with open(f"{xai_dir}/final_analysis/model_explanation.txt", "w") as f:
+        f.write(f"Model chose action: {action}\n\n")
+        f.write("Top 5 features by importance:\n")
+        for feature, importance in sorted_features[:5]:
+            f.write(f"- {feature}: {importance:.4f}\n")
 
 def test(model_name, render=True, explain=True):
 
@@ -259,7 +439,7 @@ def explain_decision(model_name="manual_save_5400000"):
             if i % 2 == 0:
                 feature_names.append(f"seat_{i//2}")
             else:
-                feature_names.append(f"fuel_level_{i//2}")
+                feature_names.append(f"fuel_level_{i//2}")  # Add more descriptive names for XAI integration
         
         # Get top contributing features for this action
         if action < len(shap_values):
