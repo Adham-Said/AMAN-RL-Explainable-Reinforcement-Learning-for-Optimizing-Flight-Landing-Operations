@@ -80,7 +80,7 @@ def test(model_name, render=True):
 
     print(f"Total rewards: {rewards}")
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
     # train()
     test("manual_save_5400000")
 

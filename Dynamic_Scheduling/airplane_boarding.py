@@ -7,35 +7,35 @@ import numpy as np
 # Register this module as a gym environment. Once registered, the id is usable in gym.make().
 # When running this code, you can ignore this warning: "UserWarning: WARN: Overriding environment airplane-boarding-v0 already in registry."
 register(
-    id='airplane-boarding-v0',
-    entry_point='airplane_boarding:AirplaneEnv', # module_name:class_name
+    id='dynamic_scheduling-v0',
+    entry_point='dynamic_scheduling:AirportEnv', # module_name:class_name
 )
 
-class PassengerStatus(Enum):
-    MOVING  = 0
-    STALLED = 1
-    STOWING = 2
-    SEATED  = 3
+class PlaneStatus(Enum):
+    APPROACHING  = 0
+    SLOWINGDOWN = 1
+    LANDING = 2
+    LANDED  = 3
 
     # Returns the string representation of the PassengerStatus enum.
     def __str__(self):
         match self:
-            case PassengerStatus.MOVING:
-                return "MOVING"
-            case PassengerStatus.STALLED:
-                return "STALLED"
-            case PassengerStatus.STOWING:
-                return "STOWING"
-            case PassengerStatus.SEATED:
-                return "SEATED"
+            case PlaneStatus.APPROACHING:
+                return "APPROACHING"
+            case PlaneStatus.SLOWINGDOWN:
+                return "SLOWINGDOWN"
+            case PlaneStatus.LANDING:
+                return "LANDING"
+            case PlaneStatus.LANDED:
+                return "LANDED"
 
-class Passenger:
+class Plane:
     def __init__(self, seat_num, row_num):
         self.seat_num = seat_num
         self.row_num = row_num
         self.low_fuel = np.random.choice([True, False], p = [0.3, 0.7])
         self.is_holding_luggage = True
-        self.status = PassengerStatus.MOVING
+        self.status = PlaneStatus.MOVING
         self.MST = np.random.choice([5, 10, 15], p = [0.15, 0.15, 0.7])
         self.in_transit = np.random.choice([True, False], p = [0.1, 0.9])
         self.seated_timer = 0
@@ -56,22 +56,22 @@ class Passenger:
         else:
             return f"L{self.seat_num:02d}"
 
-class LobbyRow:
+class Row:
     def __init__(self, row_num, seats_per_row):
         self.row_num = row_num
-        self.passengers = [Passenger(row_num * seats_per_row + i, row_num) for i in range(seats_per_row)]
+        self.passengers = [Plane(row_num * seats_per_row + i, row_num) for i in range(seats_per_row)]
 
-class Lobby:
+class Approach:
     def __init__(self, num_of_rows, seats_per_row):
         self.num_of_rows = num_of_rows
         self.seats_per_row = seats_per_row
-        self.lobby_rows = [LobbyRow(row_num, self.seats_per_row) for row_num in range(self.num_of_rows)]
+        self.lobby_rows = [Row(row_num, self.seats_per_row) for row_num in range(self.num_of_rows)]
 
-    def remove_passenger(self, row_num):
+    def remove_plane(self, row_num):
         passenger = self.lobby_rows[row_num].passengers.pop()
         return passenger
     
-    def remove_passenger_by_seat(self, seat_num):
+    def remove_plane_by_ID(self, seat_num):
         for row in self.lobby_rows:
             for i, passenger in enumerate(row.passengers):
                 if passenger is not None and passenger.seat_num == seat_num:
@@ -385,7 +385,7 @@ class AirplaneEnv(gym.Env):
             self._render_terminal()
 
     def _render_terminal(self):
-        print("Seats".center(19) + " | Aisle Line")
+        print("Service Stations".center(19) + " | Runway")
         for row in self.airplane_rows:
             for seat in row.seats:
                 print(seat, end=" ")
@@ -399,12 +399,12 @@ class AirplaneEnv(gym.Env):
 
             print()
 
-        print("\nLine entering plane:")
+        print("\nPlanes Chosen To Land:")
         for i in range(self.num_of_rows, len(self.boarding_line.line)):
             passenger = self.boarding_line.line[i]
             print(f"{passenger} {passenger.status}")
 
-        print("\nLobby:")
+        print("\nApproaching Planes:")
         for row in self.lobby.lobby_rows:
             for passenger in row.passengers:
                 print(passenger, end=" ")

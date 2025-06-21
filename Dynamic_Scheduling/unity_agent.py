@@ -1,5 +1,4 @@
-from flask import Flask, request
-from flask import jsonify
+from flask import Flask, request, jsonify
 import numpy as np
 from sb3_contrib import MaskablePPO
 import torch
@@ -15,46 +14,55 @@ except Exception as e:
     model = None
 
 def compute_action_mask(observation):
-    # Create mask where 1 means the plane is available (not processed)
-    # and 0 means it's already processed
-    mask = [1 if obs != -1 else 0 for obs in observation]
-    return np.array(mask, dtype=bool)
+    # Mask only the plane entries (every 2nd value is a priority)
+    # We assume observation = [id, prio, id, prio, ...]
+    return np.array([
+        1 if observation[i] != -1 else 0
+        for i in range(0, len(observation), 2)
+    ], dtype=bool)
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
         data = request.json
-        obs = np.array(data['obs'], dtype=np.float32)
-        
-        # Simple fallback if model fails to load
+        raw_obs = data['obs']
+
+        obs = np.array(raw_obs, dtype=np.float32)
+
+        # Reshape if flat (e.g., shape = (40,))
+        if obs.ndim == 1:
+            obs = obs.reshape(1, -1)
+
+        # Validate shape
+        if obs.shape[1] != 40:
+            raise ValueError(f"Invalid observation shape: {obs.shape}")
+
+        # If model failed to load, return fallback
         if model is None:
-            valid_indices = [i for i, val in enumerate(obs) if val != -1]
-            action = valid_indices[0] if valid_indices else 0
+            valid_indices = [i for i in range(0, len(raw_obs), 2) if raw_obs[i] != -1]
+            action = valid_indices[0] if valid_indices else -1
             return jsonify({'action': int(action)})
-        
-        # Compute action mask (only allow choosing unprocessed planes)
-        mask = compute_action_mask(obs)
-        
-        # If no valid actions, return -1
+
+        # Compute mask (1 per plane)
+        mask = compute_action_mask(raw_obs)
+
         if not any(mask):
             return jsonify({'action': -1})
-        
-        # Get action from model
+
         action, _ = model.predict(observation=obs, deterministic=True, action_masks=mask)
-        
-        # Ensure action is within valid range
+
+        # Validate the action
         valid_actions = np.where(mask)[0]
         if action not in valid_actions and len(valid_actions) > 0:
-            action = valid_actions[0]  # Fallback to first valid action
-        
+            action = valid_actions[0]
+
         print(f"Agent selected plane index: {action}")
         return jsonify({'action': int(action)})
-    
+
     except Exception as e:
         print(f"Error in predict: {e}")
-        # Fallback: return first valid action
-        valid_indices = [i for i, val in enumerate(data['obs']) if val != -1]
-        action = valid_indices[0] if valid_indices else 0
+        valid_indices = [i for i in range(0, len(data['obs']), 2) if data['obs'][i] != -1]
+        action = valid_indices[0] if valid_indices else -1
         return jsonify({'action': int(action)})
 
 if __name__ == '__main__':
